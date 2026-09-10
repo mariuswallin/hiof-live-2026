@@ -1,5 +1,7 @@
+import { Fragment } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
+import { TaskItem } from "@/components/tasks_draft/TaskItem";
 import { Theme } from "@/constants/theme";
 import type { Task } from "@/utils_draft/task-schema";
 
@@ -27,8 +29,22 @@ export function TaskList({
     return <Text style={styles.empty}>{emptyLabel}</Text>;
   }
 
-  // TODO (demo): render tasks - se src/components/lists for de ulike måtene
-  return <View style={styles.container} />;
+  // Den enkleste varianten: .map(). Se src/components/list_draft for de
+  // andre måtene (ScrollView, FlatList, FlashList) og når de lønner seg.
+  //
+  // Fragment brukes fordi hver runde gir TO elementer (skillelinje + rad),
+  // og JSX bare tillater én rot per iterasjon. `key` hører hjemme på
+  // Fragment-en - altså på det ytterste elementet - ikke på TaskItem.
+  return (
+    <View style={styles.container}>
+      {tasks.map((task, index) => (
+        <Fragment key={task.id}>
+          {index > 0 ? <View style={styles.separator} /> : null}
+          <TaskItem task={task} onToggle={onToggle} />
+        </Fragment>
+      ))}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

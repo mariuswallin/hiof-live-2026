@@ -34,7 +34,12 @@ export function TaskLayout({
         {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
 
-      {/* TODO (demo): her plasseres children og footer */}
+      {/* Det anonyme hullet: alt forelderen la mellom taggene havner her. */}
+      <View style={styles.body}>{children}</View>
+
+      {/* Det navngitte hullet. Uten footer skal ikke rammen tegnes i det hele
+          tatt, derfor sjekker vi FØR vi rendrer <View>-en. */}
+      {footer ? <View style={styles.footer}>{footer}</View> : null}
     </View>
   );
 }

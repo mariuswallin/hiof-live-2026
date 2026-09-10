@@ -1,54 +1,72 @@
-import { Theme } from "@/constants/theme";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-interface EmptyProps {
+import { Theme } from "@/constants/theme";
+
+type EmptyProps = {
   title: string;
   hint?: string;
-  onPress: ({ message, id }: { message: string; id: number }) => void;
-}
+  /** Valgfri handling. Uten den vises ingen knapp. */
+  actionLabel?: string;
+  onPress?: () => void;
+};
 
-export function Empty({ title, hint, onPress }: EmptyProps) {
-  function whenPressed() {
-    console.log("Pressed");
-    onPress({
-      message: "Hello from Empty.tsx",
-      id: 123,
-    });
-  }
-
+export function Empty({ title, hint, actionLabel, onPress }: EmptyProps) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{title}</Text>
-      <Pressable onPress={whenPressed}>
-        <Text style={styles.button}>Trykk her</Text>
-      </Pressable>
-      {hint ? <Text>{hint}</Text> : null}
+      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
+
+      {onPress ? (
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+        >
+          <Text style={styles.buttonText}>{actionLabel ?? "Prøv igjen"}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    borderWidth: 1,
-    borderColor: Theme.border,
-    borderRadius: Theme.radius.md,
-    backgroundColor: "pink",
-    width: "80%",
-    flex: 1,
+    // alignSelf i stedet for flex: 1 - boksen tar plassen den trenger, og
+    // fungerer også når den ligger inne i en liste uten fast høyde.
+    alignSelf: "center",
+    width: "100%",
     alignItems: "center",
     justifyContent: "center",
     gap: Theme.spacing.sm,
-    padding: Theme.spacing.lg,
+    padding: Theme.spacing.xl,
+    borderWidth: 1,
+    borderColor: Theme.border,
+    borderRadius: Theme.radius.md,
+    backgroundColor: Theme.surface,
   },
   title: {
     fontSize: Theme.fontSize.lg,
     color: Theme.text,
     fontWeight: "600",
   },
+  hint: {
+    fontSize: Theme.fontSize.md,
+    color: Theme.muted,
+    textAlign: "center",
+  },
   button: {
-    padding: Theme.spacing.sm,
-    backgroundColor: "red",
-    fontSize: Theme.fontSize.xl,
-    fontWeight: "900",
+    marginTop: Theme.spacing.xs,
+    paddingHorizontal: Theme.spacing.lg,
+    paddingVertical: Theme.spacing.sm,
+    borderRadius: Theme.radius.sm,
+    backgroundColor: Theme.primary,
+  },
+  pressed: {
+    opacity: 0.6,
+  },
+  buttonText: {
+    color: Theme.textInverted,
+    fontSize: Theme.fontSize.md,
+    fontWeight: "700",
   },
 });
