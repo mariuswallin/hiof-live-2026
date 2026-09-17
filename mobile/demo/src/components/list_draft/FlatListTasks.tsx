@@ -29,6 +29,9 @@ type FlatListTasksProps = {
  * - ItemSeparatorComponent  vises MELLOM elementene, ikke først/sist
  * - ListEmptyComponent      vises når data er tom
  * - contentContainerStyle   padding/gap på innholdet
+ * - keyboardDismissMode / keyboardShouldPersistTaps
+ *                           ScrollView-props som FlatList sender videre.
+ *                           Se ScrollViewList for forklaring.
  */
 export function FlatListTasks({
   tasks,
@@ -44,6 +47,8 @@ export function FlatListTasks({
       ListEmptyComponent={<Text style={styles.empty}>Ingen oppgaver</Text>}
       contentContainerStyle={styles.content}
       scrollEnabled={!insideScrollView}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
     />
   );
 }

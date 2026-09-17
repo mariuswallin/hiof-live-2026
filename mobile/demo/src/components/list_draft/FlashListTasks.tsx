@@ -33,6 +33,9 @@ export function FlashListTasks({ tasks, onToggle }: FlashListTasksProps) {
       ItemSeparatorComponent={() => <View style={styles.separator} />}
       ListEmptyComponent={<Text style={styles.empty}>Ingen oppgaver</Text>}
       contentContainerStyle={styles.content}
+      // Samme tastatur-props som ScrollView - se ScrollViewList.
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
     />
   );
 }

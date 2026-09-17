@@ -19,11 +19,24 @@ type ScrollViewListProps = {
  * - style          = selve scroll-boksen (må ha høyde, derfor flex: 1)
  * - contentContainerStyle = innholdet SOM scroller (padding og gap hører hit)
  *
+ * Tastatur (gjelder alle scroll-listene - FlatList og FlashList arver propene):
+ * - keyboardDismissMode="on-drag"         lukk tastaturet når brukeren begynner
+ *                                         å scrolle. Standard er "none".
+ * - keyboardShouldPersistTaps="handled"   et trykk på en rad virker med én gang
+ *                                         mens tastaturet er oppe. Standard er
+ *                                         "never": første trykk lukker bare
+ *                                         tastaturet, og raden får det ikke.
+ *
  * Bruk når: innholdet er blandet (tekst, bilder, skjema) og av begrenset lengde.
  */
 export function ScrollViewList({ tasks, onToggle }: ScrollViewListProps) {
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
+    >
       {tasks.map((task) => (
         <TaskItem key={task.id} task={task} onToggle={onToggle} />
       ))}
