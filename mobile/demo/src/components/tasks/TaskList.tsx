@@ -7,9 +7,10 @@ import { TaskRegister } from "./TaskRegister";
 type TaskListProps = {
   tasks: Task[];
   onRegister: (taskName: string) => void;
+  onToggle: (id: string) => void;
 };
 
-export function TaskList({ tasks, onRegister }: TaskListProps) {
+export function TaskList({ tasks, onRegister, onToggle }: TaskListProps) {
   if (tasks.length === 0) {
     return (
       <View>
@@ -22,7 +23,7 @@ export function TaskList({ tasks, onRegister }: TaskListProps) {
     <View style={styles.container}>
       <TaskRegister onRegister={onRegister} />
       {tasks.map((task) => (
-        <TaskItem key={task.id} task={task} />
+        <TaskItem key={task.id} task={task} onToggle={onToggle} />
       ))}
     </View>
   );

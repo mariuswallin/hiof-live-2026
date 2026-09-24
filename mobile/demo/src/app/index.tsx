@@ -3,56 +3,17 @@ import { Loading } from "@/components/shared/Loading";
 import { TaskLayout } from "@/components/tasks/TaskLayout";
 import { TaskList } from "@/components/tasks/TaskList";
 import { tasks } from "@/data/tasks";
+import { useIndexHook } from "@/hooks/useIndexHook";
 import { useEffect, useState } from "react";
 import { Text, View, StyleSheet, type Task } from "react-native";
 
 export default function Index() {
-  const [allMyTasks, setAllMyTasks] = useState(tasks);
-
-  const myAwesomeFunction = (data: { message: string; id: number }) => {
-    console.log("Hello from Index.tsx");
-    console.log(data);
-  };
-
-  // function myAwesomeFunction() {
-  //   console.log("Hello from Index.tsx");
-  // }
-
-  function handleRegisterTask(taskName: string) {
-    const newTask = {
-      id: (allMyTasks.length + 1).toString(),
-      title: taskName,
-      done: false, // Randomly set done status for demonstration
-    };
-
-    setAllMyTasks((prevTasks) => [...prevTasks, newTask]);
-  }
-
-  useEffect(() => {
-    // TODO: Fetch tasks from an API
-
-    const fetchTasksFromApi = async () => {
-      try {
-        const response = await fetch("https://api.example.com/tasks");
-        if (!response.ok) {
-          throw new Error("Failed to fetch tasks");
-        }
-        const data: Task[] = await response.json();
-        setAllMyTasks(data);
-      } catch (error) {
-        console.error("Error fetching tasks:", error);
-      }
-    };
-
-    fetchTasksFromApi();
-
-    console.log("Current tasks:", allMyTasks);
-  }, []);
+  const { tasks: allMyTasks, toggle, add } = useIndexHook();
 
   return (
     <View style={styles.container}>
       <TaskLayout>
-        <TaskList tasks={allMyTasks} onRegister={handleRegisterTask} />
+        <TaskList tasks={allMyTasks} onRegister={add} onToggle={toggle} />
       </TaskLayout>
       <Text>Antall tasks: {allMyTasks.length}</Text>
       {/* <Loading label={"Her laster vi ..."} />
@@ -70,3 +31,27 @@ const styles = StyleSheet.create({
     padding: 8,
   },
 });
+
+// function callBackExample(fn: (data: any) => void) {
+//   const user = { id: 1, name: "John Doe" };
+
+//   const fetcher = async () => {
+//     // Simulate an API call to fetch user data
+//     const response = await fetch("");
+//     const userData = await response.json();
+//     return userData;
+//   };
+
+//   const callback = () => fn({ ...user, updatedAt: new Date(), fetcher });
+
+//   // Return the callback function
+//   return callback;
+// }
+
+// const task = { id: 1, title: "Task 1", done: false };
+
+// callBackExample((prev) => {
+//   const handler = prev.fetcher;
+// handler()
+//   console.log({ ...prev, task });
+// });
