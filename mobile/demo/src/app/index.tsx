@@ -2,20 +2,23 @@ import { Empty } from "@/components/shared/Empty";
 import { Loading } from "@/components/shared/Loading";
 import { TaskLayout } from "@/components/tasks/TaskLayout";
 import { TaskList } from "@/components/tasks/TaskList";
-import { tasks } from "@/data/tasks";
+import { TasksProvider, useTasks } from "@/contexts/TasksContext";
+import { TASKS } from "@/data/tasks";
 import { useIndexHook } from "@/hooks/useIndexHook";
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { Text, View, StyleSheet, type Task } from "react-native";
 
 export default function Index() {
-  const { tasks: allMyTasks, toggle, add } = useIndexHook();
+  // const { tasks: allMyTasks, toggle, add } = useIndexHook();
+
+  const { tasks, add, toggle: onToggle } = useTasks();
 
   return (
     <View style={styles.container}>
       <TaskLayout>
-        <TaskList tasks={allMyTasks} onRegister={add} onToggle={toggle} />
+        <TaskList tasks={tasks} onRegister={add} onToggle={onToggle} />
       </TaskLayout>
-      <Text>Antall tasks: {allMyTasks.length}</Text>
+      <Text>Antall tasks: {tasks.length}</Text>
       {/* <Loading label={"Her laster vi ..."} />
       <Empty title={"Intet å vise"} onPress={myAwesomeFunction} />
 
