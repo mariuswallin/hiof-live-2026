@@ -11,6 +11,9 @@ import type { Task } from "@/utils_draft/task-schema";
  *               da slipper vi null-sjekker nedover.
  * - onToggle:   sendes VIDERE ned til hver TaskItem. TaskList bruker den ikke
  *               selv, den bare formidler. (Kalles ofte "prop drilling".)
+ *               CONTEXT: blir drillingen dyp, kan TaskItem i stedet hente
+ *               toggle selv med useTasks() - da trenger ikke TaskList
+ *               prop-en i det hele tatt.
  * - emptyLabel: tekst når lista er tom. Default-verdi settes i destrukturering.
  */
 type TaskListProps = {

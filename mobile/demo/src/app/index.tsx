@@ -45,6 +45,11 @@ const FORM_VARIANTS = [
 type FormVariantId = (typeof FORM_VARIANTS)[number]["id"];
 
 export default function Index() {
+  // CONTEXT: med <TasksProvider> i _layout.tsx kan tasks, toggle og addTask
+  // under erstattes av én linje:
+  //   const { tasks, toggle, add } = useTasks();
+  // Da kan også andre skjermer (f.eks. en detaljside) lese og endre samme
+  // liste. Se src/context_draft/TasksContext.tsx.
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [variant, setVariant] = useState<VariantId>("flat");
