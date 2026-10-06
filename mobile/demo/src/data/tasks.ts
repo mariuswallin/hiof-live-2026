@@ -1,6 +1,6 @@
 import type { Task } from "@/utils/task-schema";
 
-export const tasks: Task[] = [
+export const TASKS: Task[] = [
   {
     id: "1",
     title: "Task 1",

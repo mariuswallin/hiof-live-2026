@@ -1,22 +1,32 @@
 import { Theme } from "@/constants/theme";
+import { useTasks } from "@/contexts/TasksContext";
 import type { Task } from "@/utils/task-schema";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 
 type TaskItemProps = {
   task: Task;
-  onToggle?: (id: string) => void;
+  onToggle: (id: string) => void;
 };
 
-export function TaskItem({ task }: TaskItemProps) {
+export function TaskItem({ task, onToggle }: TaskItemProps) {
   const { id, title, done } = task;
+  const { tasks, toggle } = useTasks();
 
   return (
-    <View style={styles.container}>
+    <Pressable
+      style={({ pressed }) => [
+        styles.container,
+        task.done && styles.containerDone,
+        pressed && styles.containerPressed,
+      ]}
+      onPress={() => toggle(id)}
+    >
       <View style={[styles.checkbox, done && styles.checkboxDone]}>
         {done ? <Text style={styles.checkmark}>✓</Text> : null}
       </View>
+      <Text>{tasks.length}</Text>
       <Text style={[styles.title, done && styles.titleDone]}>{title}</Text>
-    </View>
+    </Pressable>
   );
 }
 
