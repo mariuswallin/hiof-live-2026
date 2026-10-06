@@ -59,12 +59,29 @@ src/
 ├─ components/
 │  ├─ Counter.tsx          en klient-komponent ("use client")
 │  └─ __tests__/           komponenttest med Testing Library
+├─ features/               alt som hører til én funksjon, samlet
+│  ├─ auth/                setUser, requireUser, requireAdmin, DemoUserPanel
+│  └─ tasks/
+│     ├─ task-schema.ts      Zod: hva vi godtar utenfra
+│     ├─ task-repository.ts  interface + factory, eneste som rører databasen
+│     ├─ task-mapper.ts      Task (rad) -> TaskDTO (det klienten ser)
+│     ├─ task-service.ts     forretningsregler, validering og tilgang
+│     ├─ task-controller.ts  HTTP inn, Response ut
+│     ├─ task-routes.ts      /api/tasks med vakter
+│     ├─ actions.ts          server actions ("use server")
+│     ├─ task-api.ts         fetch mot API-et fra nettleseren
+│     ├─ components/         TaskList, TaskItem, CreateTaskForm
+│     ├─ pages/TasksPage.tsx /tasks
+│     └─ __tests__/          skjematest + integrasjonstest mot SQLite
 ├─ db/
 │  ├─ schema/              tabellene. Eksempel: users og tasks
 │  ├─ relations.ts         relasjonene mellom tabellene
 │  ├─ index.ts             databaseklienten
 │  └─ seed.ts              testdata
-├─ lib/id.ts               createId(), en id-generator
+├─ lib/
+│  ├─ id.ts                createId(), en id-generator
+│  ├─ result.ts            Result<T>, Errors, executeDbOperation
+│  └─ response.ts          Result -> Response med riktig statuskode
 └─ test/setup-dom.ts       kjøres før hver testfil
 
 e2e/                       Playwright-tester i ekte nettleser

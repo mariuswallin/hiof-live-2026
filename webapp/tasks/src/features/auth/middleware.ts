@@ -1,6 +1,7 @@
 import type { RouteMiddleware } from "rwsdk/router";
 import type { SessionUser } from "./auth-types";
 import { getDemoUserFromRequest } from "./demo-user";
+import { createErrorResponse } from "@/lib/response";
 
 /* =========================================================================
  * MELLOMVARE
@@ -39,10 +40,10 @@ export const setUser: RouteMiddleware = ({ ctx, request }) => {
  */
 export const requireUser: RouteMiddleware = ({ ctx }) => {
   if (!ctx.user) {
-    return Response.json(
-      { error: "Du må være innlogget. Prøv: -H 'x-demo-user: admin'" },
-      { status: 401 },
-    );
+    return createErrorResponse({
+      code: "UNAUTHORIZED",
+      message: "Du må være innlogget. Prøv: -H 'x-demo-user: admin'",
+    });
   }
 };
 
@@ -56,13 +57,16 @@ export const requireUser: RouteMiddleware = ({ ctx }) => {
  */
 export const requireAdmin: RouteMiddleware = ({ ctx }) => {
   if (!ctx.user) {
-    return Response.json({ error: "Du må være innlogget" }, { status: 401 });
+    return createErrorResponse({
+      code: "UNAUTHORIZED",
+      message: "Du må være innlogget",
+    });
   }
 
   if (!isAdmin(ctx.user)) {
-    return Response.json(
-      { error: `${ctx.user.email} er ikke admin` },
-      { status: 403 },
-    );
+    return createErrorResponse({
+      code: "FORBIDDEN",
+      message: `${ctx.user.email} er ikke admin`,
+    });
   }
 };

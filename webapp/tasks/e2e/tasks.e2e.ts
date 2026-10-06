@@ -16,21 +16,23 @@ const taskItems = (page: Page) => page.getByTestId("task");
  * Ikke `waitForLoadState("networkidle")`. Den venter på at nettverket blir
  * stille, som er noe annet enn at siden er klar, og i dev-modus blir det
  * aldri helt stille (HMR holder en socket åpen). Her venter vi på det vi
- * faktisk trenger: at avkryssingsboksen er skrudd på, noe TaskItem gjør
- * først etter hydrering.
+ * faktisk trenger: `<html data-hydrated="true">`, som client.tsx setter når
+ * React har hydrert siden.
  */
 async function waitForHydration(page: Page) {
-  await expect(taskItems(page).first().getByRole("checkbox")).toBeEnabled();
+  await expect(page.locator("html")).toHaveAttribute("data-hydrated", "true");
 }
 
 /**
- * Logger inn ved å trykke på knappen, som en bruker ville gjort. Knappen
- * setter cookien `demo-user` og laster siden på nytt.
+ * Bytter bruker via DemoUserPanel nede i høyre hjørne, som en bruker ville
+ * gjort. Knappen setter cookien `demo-user` og henter siden på nytt.
  */
-async function logInAsAdmin(page: Page) {
-  await page.getByRole("button", { name: "Logg inn som admin" }).click();
+async function logInAs(page: Page, name: "Admin" | "Bruker") {
+  await page.getByRole("button", { name, exact: true }).click();
   await expect(page.getByTestId("logged-in-as")).toHaveText(
-    "Innlogget som admin@test.no"
+    name === "Admin"
+      ? "Innlogget som admin@test.no"
+      : "Innlogget som test@example.com"
   );
 }
 
@@ -56,10 +58,10 @@ test("uten innlogging avviser server action endringen", async ({ page }) => {
   // har svart. Da feiler `check()` selv om alt virker som det skal.
   await taskItems(page).first().getByRole("checkbox").click();
 
-  // Feilen kommer fra serveren, ikke fra klienten: sjekken ligger inne i
-  // selve server-actionen.
+  // Feilen kommer fra serveren, ikke fra klienten: server actionen går ikke
+  // gjennom mellomvaren, men servicen sier nei likevel.
   await expect(page.getByTestId("error").first()).toHaveText(
-    "Du må være innlogget for å endre"
+    "Du må være innlogget"
   );
 });
 
@@ -67,7 +69,7 @@ test("server action lagrer avkryssingen i databasen", async ({ page }) => {
   await page.context().clearCookies();
   await page.goto("/tasks");
   await waitForHydration(page);
-  await logInAsAdmin(page);
+  await logInAs(page, "Admin");
   await waitForHydration(page);
 
   const firstTask = taskItems(page).first();
@@ -95,4 +97,79 @@ test("server action lagrer avkryssingen i databasen", async ({ page }) => {
   await expect(taskItems(page).first().getByTestId("status")).toHaveText(
     wasCompleted ? "ferdig" : "ikke ferdig"
   );
+});
+
+test("server action lager en oppgave", async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto("/tasks");
+  await waitForHydration(page);
+  await logInAs(page, "Admin");
+
+  const title = `E2E ${Date.now()}`;
+  await page.getByLabel("Ny oppgave").fill(title);
+  await page.getByRole("button", { name: "Legg til" }).click();
+
+  const created = taskItems(page).filter({ hasText: title });
+  await expect(created).toHaveCount(1);
+  await expect(page.getByLabel("Ny oppgave")).toHaveValue("");
+
+  // Overlever omlasting: den ligger i databasen.
+  await page.reload();
+  await expect(created).toHaveCount(1);
+
+  // Rydd opp via API-et.
+  await created.getByRole("button", { name: "Slett" }).click();
+  await expect(created).toHaveCount(0);
+});
+
+test("tom tittel gir valideringsfeil fra servicen", async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto("/tasks");
+  await waitForHydration(page);
+  await logInAs(page, "Admin");
+
+  await page.getByRole("button", { name: "Legg til" }).click();
+
+  await expect(page.getByText("Tittel kan ikke være tom")).toBeVisible();
+});
+
+test("vanlig bruker får 403 ved sletting, og oppgaven kommer tilbake", async ({
+  page,
+}) => {
+  await page.context().clearCookies();
+  await page.goto("/tasks");
+  await waitForHydration(page);
+  await logInAs(page, "Bruker");
+
+  const count = await taskItems(page).count();
+  await taskItems(page).first().getByRole("button", { name: "Slett" }).click();
+
+  await expect(page.getByTestId("delete-error")).toContainText("FORBIDDEN");
+  // useOptimistic ruller tilbake av seg selv.
+  await expect(taskItems(page)).toHaveCount(count);
+});
+
+test("admin sletter via DELETE /api/tasks/:id", async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto("/tasks");
+  await waitForHydration(page);
+  await logInAs(page, "Admin");
+
+  const title = `Slett ${Date.now()}`;
+  await page.getByLabel("Ny oppgave").fill(title);
+  await page.getByRole("button", { name: "Legg til" }).click();
+  const created = taskItems(page).filter({ hasText: title });
+  await expect(created.getByRole("checkbox")).toBeEnabled();
+
+  const deleteRequest = page.waitForResponse(
+    (response) =>
+      response.request().method() === "DELETE" &&
+      response.url().includes("/api/tasks/")
+  );
+  await created.getByRole("button", { name: "Slett" }).click();
+  expect((await deleteRequest).status()).toBe(204);
+
+  await expect(created).toHaveCount(0);
+  await page.reload();
+  await expect(created).toHaveCount(0);
 });

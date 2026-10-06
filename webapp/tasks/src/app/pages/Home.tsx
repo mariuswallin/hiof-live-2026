@@ -1,7 +1,8 @@
+import { requestInfo } from "rwsdk/worker";
 import { Counter } from "@/components/Counter";
 import { TimeClient } from "@/components/TimeClient";
-import { db } from "@/db";
-import { tasks } from "@/db/schema";
+import { DemoUserPanel } from "@/features/auth/components/DemoUserPanel";
+import { taskService } from "@/features/tasks/task-service";
 
 /**
  * En server-komponent. Den kjører på serveren, én gang per forespørsel, og
@@ -14,9 +15,10 @@ import { tasks } from "@/db/schema";
 export async function Home() {
   const now = new Date().toLocaleString("no-NO");
 
-  const allTasks = await db.select().from(tasks);
-
-  console.log("allTasks", allTasks);
+  // Via servicen, ikke rett mot db. Samme vei som /tasks bruker.
+  const { ctx } = requestInfo;
+  const result = await taskService.list(ctx.user);
+  const allTasks = result.success ? result.data : [];
 
   return (
     <main className="mx-auto max-w-2xl p-8 font-sans">
@@ -31,7 +33,12 @@ export async function Home() {
       <TimeClient />
       <Counter />
 
-      <h2 className="mt-10 text-xl font-semibold">Oppgaver</h2>
+      <h2 className="mt-10 text-xl font-semibold">
+        Oppgaver{" "}
+        <a className="text-base font-normal underline" href="/tasks">
+          (administrer)
+        </a>
+      </h2>
       <ul className="mt-2 list-disc space-y-1 pl-5 text-slate-700">
         {allTasks.map((task) => (
           <li key={task.id}>{task.title}</li>
@@ -52,6 +59,9 @@ export async function Home() {
         </li>
         <li>Trykk på knappen over. Den er en klient-komponent.</li>
       </ul>
+
+      {/* Fast nede i høyre hjørne. Bytt bruker uten DevTools. */}
+      <DemoUserPanel user={ctx.user} />
     </main>
   );
 }
