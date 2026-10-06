@@ -6,14 +6,39 @@ import { route } from "rwsdk/router";
 
 export const taskRoutes = [
   route("/api/tasks", {
-    get: () => {},
-    post: () => {},
+    get: () => {
+      // taskController.list
+    },
+    post: [
+      // requireUser,
+      () => {
+        // taskController.create
+      },
+    ],
   }),
   route("/api/tasks/:id", {
-    get: () => {},
-    put: () => {},
+    get: () => {
+      // taskController.get
+    },
+    put: [
+      // requireUser,
+      () => {
+        // taskController.update
+      },
+    ],
+    delete: [
+      // requireAdmin,
+      () => {
+        // taskController.remove
+      },
+    ],
   }),
   route("/api/tasks/:id/:action", {
-    post: () => {},
+    post: [
+      // requireUser,
+      () => {
+        // taskController.action
+      },
+    ],
   }),
 ];
