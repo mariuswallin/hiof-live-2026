@@ -11,13 +11,18 @@ export interface TaskRepository {
 export function createTaskRepository(db: DB): TaskRepository {
   return {
     create: (task) => {
-      db.insert(task);
-    }, // implement thi,
-    list: () => {
-      // her skriver jeg ren sql
+      return db.insert(tasks).values(task);
     },
-    get: (id) => {
-      // her bruker prisma
+    update: async (id, task) => {
+      throw new Error("Not implemented");
+    },
+    get: async (id) => {
+      throw new Error("Not implemented");
+    },
+    list: async () => {
+      throw new Error("Not implemented");
+    },
+    remove: async (id) => {
     },
   };
 }
