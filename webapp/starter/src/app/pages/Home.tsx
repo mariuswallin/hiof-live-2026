@@ -1,5 +1,6 @@
 import { Counter } from "@/components/Counter";
 import { TimeClient } from "@/components/TimeClient";
+import { db } from "@/db";
 
 /**
  * En server-komponent. Den kjører på serveren, én gang per forespørsel, og

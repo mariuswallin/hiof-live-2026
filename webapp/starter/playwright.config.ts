@@ -27,6 +27,9 @@ export default defineConfig({
     // Lagrer en trace når en test feiler. Åpne den med:
     //   npx playwright show-trace test-results/<mappe>/trace.zip
     trace: "retain-on-failure",
+    // Skrur av kunstig treghet og tilfeldige feil (src/lib/demo-chaos.ts).
+    // Ellers feiler ca. hver 3. lagring, og testene blir tilfeldige.
+    extraHTTPHeaders: { "x-demo-chaos": "off" },
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: process.env.E2E_BASE_URL

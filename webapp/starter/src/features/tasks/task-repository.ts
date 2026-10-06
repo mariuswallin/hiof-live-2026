@@ -1,5 +1,4 @@
-import type { DB } from "@/db";
-import { tasks } from "@/db/schema/task-schema";
+import { db, type DB } from "@/db";
 
 export interface TaskRepository {
   create: (task: any) => Promise<any>;
@@ -29,6 +28,6 @@ export function createTaskRepository(db: DB): TaskRepository {
 }
 
 //
-const repository = createTaskRepository();
+export const taskRepository = createTaskRepository(db);
 
-repository.create({ title: "My Task", description: "This is my task" });
+// repository.create({ title: "My Task", description: "This is my task" });
