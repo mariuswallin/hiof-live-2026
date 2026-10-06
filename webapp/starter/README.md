@@ -148,6 +148,77 @@ npm run test:e2e
 
 ---
 
+## Tregt nett og tilfeldige feil (demo)
+
+`src/lib/demo-chaos.ts` gjør serveren med vilje treg, og lar lagring feile ca.
+hver 3. gang. Da ser dere lasting, «lagrer…», og at `useOptimistic` ruller
+tilbake. Kall `demoDelay(request, ms)` og `demoFailure(request)` i en server
+action eller controller, FØR dere skriver til databasen.
+
+Av i produksjon, og av for forespørsler med headeren `x-demo-chaos: off`.
+Playwright sender den, så e2e-testene er stabile.
+
+---
+
+## Breakpoints i VS Code
+
+Koden kjører tre forskjellige steder, og hvert sted trenger sin debugger:
+
+| Kode | Kjører i | Debugger |
+| --- | --- | --- |
+| `worker.tsx`, server-komponenter, server actions | `workerd` | attach til port 9229 |
+| `"use client"`-komponenter | nettleseren | Chrome |
+| Vitest-tester | Node | launch Vitest |
+
+Åpne `webapp/tasks` som mappe i VS Code, og lag `.vscode/launch.json`:
+
+```jsonc
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // 1. Start `npm run dev` først. 2. Kjør denne. 3. Last siden.
+      "name": "Worker (server)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "cwd": "/",
+      "resolveSourceMapLocations": null,
+      "attachExistingChildren": false,
+      "autoAttachChildProcesses": false,
+      "sourceMaps": true
+    },
+    {
+      "name": "Nettleser (klient)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}"
+    },
+    {
+      // Åpne en testfil, og kjør denne.
+      "name": "Vitest (denne fila)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+      "args": ["run", "${relativeFile}"],
+      "autoAttachChildProcesses": true,
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"],
+      "smartStep": true,
+      "console": "integratedTerminal"
+    }
+  ]
+}
+```
+
+Port 9229 er standard. Er den opptatt (en annen dev-server kjører), velger Vite
+en annen og skriver `Default inspector port 9229 not available, using 9230
+instead`. Bytt da `port`, eller stopp den andre serveren.
+
+`debugger;` i koden virker også, så lenge en debugger er koblet til.
+
+---
+
 ## Windows
 
 Alt virker på Windows, men noen kommandoer skrives annerledes i PowerShell.
