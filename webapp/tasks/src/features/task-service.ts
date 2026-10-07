@@ -12,7 +12,20 @@ import { validateListParams } from "./utils/validate-list-params";
 import { validateTask } from "./utils/validate-task";
 
 export interface TaskService {
-  create(input: unknown): Promise<TaskDTO>;
+  create(input: unknown): Promise<
+    | {
+        ok: true;
+        data: TaskDTO;
+      }
+    | {
+        ok: false;
+        error: {
+          code: string;
+          message: string;
+          fieldErrors: Record<string, string[]>;
+        };
+      }
+  >;
   findById(id: string): Promise<TaskDTO | null>;
   list(params?: Params): Promise<
     | {
