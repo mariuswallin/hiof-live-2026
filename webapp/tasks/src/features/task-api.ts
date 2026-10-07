@@ -14,6 +14,8 @@ export async function listTasks(params: Record<string, string> = {}) {
     }
 
     const data = await response.json();
+    // TODO: `as` sier bare til TypeScript hvilken form svaret har, uten å sjekke det.
+    // Svaret kommer utenfra og bør valideres med Zod og safeParse
     return data as { ok: true; data: TaskDTO[] };
   } catch (error) {
     console.log(error);
@@ -38,7 +40,7 @@ export async function listTasks(params: Record<string, string> = {}) {
 export async function createTask(data: {
   title: string;
   dueDate?: string;
-}): Promise<TaskDTO | null> {
+}): Promise<CreateTaskResult> {
   try {
     const response = await fetch("/api/v1/tasks", {
       method: "POST",
@@ -47,11 +49,31 @@ export async function createTask(data: {
       },
       body: JSON.stringify(data),
     });
-    return (await response.json()) as TaskDTO;
+    // API-et svarer { ok, data } ved 201 og { ok: false, error } ved 400/500.
+    // TODO: Samme som i listTasks: `as` sjekker ingenting. Valider svaret med Zod
+    return (await response.json()) as CreateTaskResult;
   } catch (error) {
     console.error(error);
-    return null;
+    return {
+      ok: false,
+      error: {
+        code: "500",
+        message: "Fikk ikke kontakt med serveren",
+        fieldErrors: {},
+      },
+    };
   }
 }
+
+type CreateTaskResult =
+  | { ok: true; data: TaskDTO }
+  | {
+      ok: false;
+      error: {
+        code: string;
+        message: string;
+        fieldErrors: Record<string, string[]>;
+      };
+    };
 
 // await createTask({ id: 1, title: "test" });

@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasks-arkitekturen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Schibsted+Grotesk:ital,wght@0,400;0,500;0,700;0,800;1,400&display=swap">
+<style>
+/* Layout: smal lesekolonne (72ch) med ett bredt kart i midten; farge = lag, brukt likt overalt */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --canvas: #fafbfc;
+  --ink: #16202c;
+  --muted: #5b6878;
+  --line: #d6dce4;
+  --edge: #7f8a98;
+  --code-bg: #eef1f5;
+  --entry: #4a5869;
+  --recv: #3557d4;
+  --client: #9b37b0;
+  --logic: #b26700;
+  --access: #23864a;
+  --db: #0b7f93;
+  --warn: #a14a00;
+  --sans: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --entry-t: color-mix(in srgb, var(--entry) 12%, var(--surface));
+  --recv-t: color-mix(in srgb, var(--recv) 12%, var(--surface));
+  --client-t: color-mix(in srgb, var(--client) 12%, var(--surface));
+  --logic-t: color-mix(in srgb, var(--logic) 13%, var(--surface));
+  --access-t: color-mix(in srgb, var(--access) 13%, var(--surface));
+  --db-t: color-mix(in srgb, var(--db) 13%, var(--surface));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141a; --surface: #161d26; --canvas: #121920; --ink: #e5eaf0; --muted: #98a4b3;
+    --line: #283340; --edge: #6f7c8c; --code-bg: #1c2531;
+    --entry: #a9b6c6; --recv: #8ea4ff; --client: #d68ae8; --logic: #f0a94a; --access: #63c98a; --db: #45c2d6; --warn: #f0a94a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141a; --surface: #161d26; --canvas: #121920; --ink: #e5eaf0; --muted: #98a4b3;
+  --line: #283340; --edge: #6f7c8c; --code-bg: #1c2531;
+  --entry: #a9b6c6; --recv: #8ea4ff; --client: #d68ae8; --logic: #f0a94a; --access: #63c98a; --db: #45c2d6; --warn: #f0a94a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 16px/1.6 var(--sans);
+  padding-inline: 20px;
+  padding-block: 0 64px;
+}
+code, pre { font-family: var(--mono); }
+code { font-size: 0.86em; background: var(--code-bg); padding: 0.08em 0.35em; border-radius: 4px; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--recv); outline-offset: 2px; }
+
+.wrap { max-width: 1180px; margin-inline: auto; }
+.read { max-width: 72ch; }
+
+/* layer colours */
+.l-entry { --c: var(--entry); --t: var(--entry-t); }
+.l-recv { --c: var(--recv); --t: var(--recv-t); }
+.l-client { --c: var(--client); --t: var(--client-t); }
+.l-logic { --c: var(--logic); --t: var(--logic-t); }
+.l-access { --c: var(--access); --t: var(--access-t); }
+.l-db { --c: var(--db); --t: var(--db-t); }
+
+/* header */
+header { padding-block: 56px 28px; }
+.eyebrow { font: 500 13px/1.4 var(--mono); color: var(--muted); letter-spacing: 0.01em; }
+h1 { font-size: clamp(2rem, 4.6vw, 3rem); line-height: 1.08; font-weight: 800; letter-spacing: -0.025em; margin: 12px 0 16px; text-wrap: balance; }
+.lead { font-size: 1.15rem; line-height: 1.55; color: var(--ink); margin: 0; }
+.lead code { font-size: 0.82em; }
+
+section { padding-block: 40px 8px; }
+h2 { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.015em; margin: 0 0 8px; text-wrap: balance; }
+h3 { font-size: 1.05rem; font-weight: 700; margin: 0 0 6px; }
+.intro { color: var(--muted); margin: 0 0 24px; }
+.intro code { color: var(--ink); }
+
+/* layer cards */
+.layers { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.layer { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.layer-head { display: flex; align-items: center; gap: 8px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; background: var(--c); flex: none; }
+.layer-name { font-weight: 700; font-size: 1rem; }
+.layer-where { font: 400 12px/1.45 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.layer p { margin: 0; font-size: 14.5px; line-height: 1.5; }
+.layer .like { color: var(--muted); font-style: italic; font-size: 13.5px; margin-top: auto; padding-top: 4px; }
+
+/* map */
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.flowbtn {
+  font: 600 14px/1 var(--sans); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 999px; padding: 10px 14px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.flowbtn small { font: 400 12px/1 var(--mono); color: var(--muted); }
+.flowbtn:hover { border-color: var(--edge); }
+.flowbtn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.flowbtn[aria-pressed="true"] small { color: inherit; opacity: 0.75; }
+
+.mapbox { background: var(--canvas); border: 1px solid var(--line); border-radius: 10px; }
+.mapscroll { overflow-x: auto; padding: 8px; }
+.mapscroll svg { display: block; width: 100%; min-width: 900px; height: auto; }
+.scrollhint { display: none; font-size: 13px; color: var(--muted); padding: 10px 14px 0; margin: 0; }
+@media (max-width: 940px) { .scrollhint { display: block; } }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend .ln { width: 26px; height: 0; border-top: 2px solid var(--edge); }
+.legend .ln.net { border-top-style: dashed; }
+
+.steps { margin-top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; }
+.steps h3 { margin-bottom: 8px; }
+.steps p { margin: 0; max-width: 72ch; }
+.steps ol { margin: 0; padding-left: 1.4em; display: grid; gap: 6px; max-width: 80ch; }
+.steps li::marker { font-weight: 700; color: var(--muted); }
+
+/* svg */
+.sep { stroke: var(--line); stroke-dasharray: 3 5; }
+.bl { font: 700 10.5px var(--sans); letter-spacing: 0.08em; fill: var(--muted); }
+.bl tspan.f { font: 400 11px var(--mono); letter-spacing: 0; }
+.node rect, .node ellipse, .node path { fill: var(--t); stroke: var(--c); stroke-width: 1.3; transition: stroke-width .15s; }
+a.node { cursor: pointer; }
+a.node:hover rect, a.node:focus-visible rect { stroke-width: 2.4; }
+a.node:focus { outline: none; }
+.nn { font: 600 12.5px var(--mono); fill: var(--ink); }
+.nb { font: 700 15px var(--mono); fill: var(--ink); }
+.ns { font: 600 11.5px var(--mono); fill: var(--ink); }
+.nr { font: 400 11.5px var(--sans); fill: var(--muted); }
+.grp { fill: none; stroke: var(--line); stroke-width: 1.2; }
+.gt { font: 700 10.5px var(--sans); letter-spacing: 0.06em; fill: var(--muted); }
+.edge { fill: none; stroke: var(--edge); stroke-width: 1.5; marker-end: url(#ah); transition: stroke .15s; }
+.edge.net { stroke-dasharray: 6 4; }
+.mk { fill: var(--edge); }
+.mk-on { fill: var(--ink); }
+.el { font: 400 11px var(--sans); fill: var(--muted); paint-order: stroke; stroke: var(--canvas); stroke-width: 4px; stroke-linejoin: round; }
+.el.code { font-family: var(--mono); font-size: 10.5px; }
+svg [data-f] { transition: opacity .2s; }
+svg .dim { opacity: 0.12; }
+.flowing .e.on .edge { stroke: var(--ink); stroke-width: 2.4; marker-end: url(#ah-on); }
+.flowing .e.on .el { fill: var(--ink); font-weight: 600; }
+.flowing .node.on rect, .flowing .node.on ellipse, .flowing .node.on path { stroke-width: 2.2; }
+
+/* files */
+.files { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 40px; align-items: start; }
+.tree { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font: 400 13px/1.5 var(--mono); max-height: calc(100vh - 32px); overflow: auto; }
+.tree ul { list-style: none; margin: 0; padding-left: 14px; border-left: 1px solid var(--line); }
+.tree > ul { padding-left: 0; border-left: 0; }
+.tree li { padding-block: 1px; }
+.tree .dir { font-weight: 600; color: var(--muted); }
+.tree a { text-decoration: none; display: inline-flex; align-items: center; gap: 7px; border-radius: 4px; padding-inline: 2px; }
+.tree a:hover { text-decoration: underline; }
+.tree .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.tree .muted { color: var(--muted); }
+
+.folder + .folder { margin-top: 36px; }
+.folder > h3 { font: 600 14px/1.4 var(--mono); color: var(--muted); margin: 0 0 4px; }
+.folder > h3 b { color: var(--ink); }
+.folder > .fnote { margin: 0 0 8px; font-size: 14.5px; color: var(--muted); max-width: 72ch; }
+.file { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 4px 24px; padding-block: 14px; border-top: 1px solid var(--line); scroll-margin-top: 16px; border-radius: 6px; transition: background .4s; }
+.file:target { background: var(--t); padding-inline: 10px; }
+.fname { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; min-width: 0; }
+.fname code { background: none; padding: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.chip { font: 600 11px/1 var(--sans); letter-spacing: 0.04em; text-transform: uppercase; color: var(--c); background: var(--t); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); padding: 4px 7px; border-radius: 4px; }
+.fdesc { min-width: 0; }
+.fdesc p { margin: 0; font-size: 15px; }
+.fdesc p + p { margin-top: 6px; }
+.uses { font-size: 13.5px !important; color: var(--muted); }
+.extra { margin-top: 36px; padding: 16px 18px; border: 1px dashed var(--line); border-radius: 8px; font-size: 14.5px; color: var(--muted); }
+.extra p { margin: 0; }
+.extra p + p { margin-top: 6px; }
+.extra code { color: var(--ink); }
+
+/* trace */
+.trace { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+.trace > li { counter-increment: s; display: grid; grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) minmax(0, 1.15fr); gap: 8px 24px; padding-block: 16px; border-top: 1px solid var(--line); align-items: start; }
+.t-file { display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+.t-file::before { content: counter(s); font: 700 13px/1 var(--mono); color: var(--muted); width: 1.2em; flex: none; }
+.t-file code { background: none; padding: 0; font-weight: 600; color: var(--c); font-size: 13.5px; overflow-wrap: anywhere; }
+.t-what { margin: 0; font-size: 15px; min-width: 0; }
+.trace pre { margin: 0; background: var(--code-bg); border-radius: 6px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5; overflow-x: auto; min-width: 0; }
+.trace pre code { background: none; padding: 0; font-size: inherit; }
+.fail { margin-top: 18px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 8px 24px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 7%, var(--surface)); border-radius: 8px; }
+.fail h3 { color: var(--warn); }
+.fail p { margin: 0; font-size: 15px; }
+.fail pre { margin: 0; background: var(--code-bg); border-radius: 6px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5; overflow-x: auto; }
+
+/* patterns */
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; min-width: 0; }
+.panel p { margin: 0 0 12px; font-size: 15px; }
+.panel pre { margin: 0 0 12px; background: var(--code-bg); border-radius: 6px; padding: 12px 14px; font-size: 12.5px; line-height: 1.55; overflow-x: auto; }
+.panel pre:last-child, .panel p:last-child { margin-bottom: 0; }
+.panel .cm { color: var(--muted); }
+
+.todo { margin-top: 16px; padding: 18px 22px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.todo ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: 15px; }
+
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+
+@media (max-width: 860px) {
+  .files { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .tree { position: static; max-height: none; }
+  .trace > li { grid-template-columns: minmax(0, 1fr); }
+  .fail { grid-template-columns: minmax(0, 1fr); }
+  .pair { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .file { grid-template-columns: minmax(0, 1fr); }
+  header { padding-block: 32px 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+  html { scroll-behavior: auto; }
+}
+body { margin: 0; }
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="read">
+    <div class="eyebrow">webapp/tasks/src · worker.tsx + features/ + db/</div>
+    <h1>Slik henger tasks-appen sammen</h1>
+    <p class="lead">Alle forespørsler kommer inn i <code>worker.tsx</code>. Derfra går de gjennom filene i <code>features/</code> og ned til databasen via <code>db/</code>. Hvert lag gjør én jobb og snakker bare med laget rett under seg.</p>
+  </header>
+
+  <section id="lag" aria-labelledby="h-lag">
+    <h2 id="h-lag">Lagene</h2>
+    <p class="intro read">Hver fil har én rolle. Fargene betyr det samme i hele dokumentet.</p>
+    <div class="layers">
+      <div class="layer l-entry">
+        <div class="layer-head"><span class="sw"></span><span class="layer-name">Inngang</span></div>
+        <div class="layer-where">worker.tsx</div>
+        <p>Tar imot alle forespørsler og sender dem til riktig rute eller side.</p>
+        <p class="like">Hovmesteren i døra.</p>
+      </div>
+      <div class="layer l-recv">
+        <div class="layer-head"><span class="sw"></span><span class="layer-name">Mottak</span></div>
+        <div class="layer-where">task-routes, task-controller, pages/TasksPage, actions</div>
+        <p>Tar imot på tre måter (API, side, skjema) og gjør det om til et kall til service.</p>
+        <p class="like">Servitøren som tar bestillingen.</p>
+      </div>
+      <div class="layer l-client">
+        <div class="layer-head"><span class="sw"></span><span class="layer-name">Nettleser</span></div>
+        <div class="layer-where">components/, TasksPageClient, task-api</div>
+        <p>Kode som kjører hos brukeren: viser listen og skjemaet, og henter data.</p>
+        <p class="like">Gjesten ved bordet.</p>
+      </div>
+      <div class="layer l-logic">
+        <div class="layer-head"><span class="sw"></span><span class="layer-name">Logikk</span></div>
+        <div class="layer-where">task-service + utils/, task-schema, task-mapper</div>
+        <p>Reglene: sjekker input, bestemmer hva som skal skje og lager svaret.</p>
+        <p class="like">Kokken som følger oppskriften.</p>
+      </div>
+      <div class="layer l-access">
+        <div class="layer-head"><span class="sw"></span><span class="layer-name">Datatilgang</span></div>
+        <div class="layer-where">task-repository</div>
+        <p>Det eneste stedet i features/ som snakker med databasen.</p>
+        <p class="like">Lagersjefen, den eneste med nøkkel.</p>
+      </div>
+      <div class="layer l-db">
+        <div class="layer-head"><span class="sw"></span><span class="layer-name">Database</span></div>
+        <div class="layer-where">db/</div>
+        <p>Tabellene, relasjonene og koblingen til Cloudflare D1.</p>
+        <p class="like">Selve lageret med hyllene.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="kart" aria-labelledby="h-kart">
+    <h2 id="h-kart">Kartet</h2>
+    <p class="intro read">Tre veier inn, én vei ned. Velg en vei for å se hvilke filer den går gjennom. Klikk på en fil for å lese hva den gjør. Pilene betyr «kaller» eller «bruker».</p>
+
+    <div class="controls" role="group" aria-label="Velg vei gjennom appen">
+      <button class="flowbtn" type="button" data-flow="all" aria-pressed="true">Alle</button>
+      <button class="flowbtn" type="button" data-flow="page" aria-pressed="false">Siden <small>/tasks</small></button>
+      <button class="flowbtn" type="button" data-flow="form" aria-pressed="false">Skjemaet <small>server action</small></button>
+      <button class="flowbtn" type="button" data-flow="rest" aria-pressed="false">REST-API <small>POST /api/v1/tasks</small></button>
+      <button class="flowbtn" type="button" data-flow="client" aria-pressed="false">Siden <small>/tasks-client</small></button>
+    </div>
+
+    <figure class="mapbox" style="margin:0">
+      <p class="scrollhint">Dra sideveis for å se hele kartet.</p>
+      <div class="mapscroll">
+        <svg id="map" viewBox="0 0 1140 1010" role="img" aria-label="Kart over tasks-appen. worker.tsx sender forespørsler til tre innganger: REST-API via task-routes og task-controller, serversiden TasksPage, og skjemaet via server action i actions.ts. Alle tre kaller task-service.ts, som bruker hjelpefilene og kaller task-repository.ts, som bruker db/index.ts og Cloudflare D1.">
+          <defs>
+            <marker id="ah" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path class="mk" d="M0,0 L8,4 L0,8 z"/></marker>
+            <marker id="ah-on" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path class="mk-on" d="M0,0 L8,4 L0,8 z"/></marker>
+          </defs>
+
+          <!-- band separators + labels -->
+          <line class="sep" x1="0" y1="92" x2="1140" y2="92"/>
+          <line class="sep" x1="0" y1="512" x2="1140" y2="512"/>
+          <line class="sep" x1="0" y1="716" x2="1140" y2="716"/>
+          <line class="sep" x1="0" y1="824" x2="1140" y2="824"/>
+          <text class="bl" x="1124" y="22" text-anchor="end">1 INNGANG <tspan class="f">src/worker.tsx</tspan></text>
+          <text class="bl" x="1124" y="118" text-anchor="end">2 MOTTAK <tspan class="f">src/features/ · pages/ · components/</tspan></text>
+          <text class="bl" x="1124" y="534" text-anchor="end">3 LOGIKK <tspan class="f">src/features/ · utils/</tspan></text>
+          <text class="bl" x="1124" y="740" text-anchor="end">4 DATATILGANG <tspan class="f">src/features/</tspan></text>
+          <text class="bl" x="1124" y="846" text-anchor="end">5 DATABASE <tspan class="f">src/db/</tspan></text>
+
+          <!-- edges -->
+          <g class="e" data-f="client"><polyline class="edge" points="470,78 470,100 108,100 108,140"/><text class="el code" x="114" y="124">/tasks-client</text></g>
+          <g class="e" data-f="rest"><polyline class="edge" points="530,78 530,116 374,116 374,240"/><text class="el code" x="380" y="176">/api/v1/tasks/*</text></g>
+          <g class="e" data-f="page"><polyline class="edge" points="598,78 598,140"/><text class="el code" x="604" y="118">/tasks</text></g>
+          <g class="e" data-f="client"><polyline class="edge" points="108,192 108,240"/><text class="el code" x="114" y="221">listTasks()</text></g>
+          <g class="e" data-f="client"><polyline class="edge net" points="196,266 276,266"/><text class="el code" x="236" y="258" text-anchor="middle">fetch</text></g>
+          <g class="e" data-f="client rest"><polyline class="edge" points="374,292 374,340"/><text class="el" x="380" y="321">velger funksjon</text></g>
+          <g class="e" data-f="client rest"><polyline class="edge" points="374,392 374,584"/><text class="el code" x="380" y="470">service.list / .create</text></g>
+          <g class="e" data-f="page"><polyline class="edge" points="598,192 598,584"/><text class="el code" x="604" y="300">service.list()</text></g>
+          <g class="e" data-f="page"><polyline class="edge" points="696,166 822,166 822,240"/><text class="el" x="759" y="159" text-anchor="middle">rendrer</text></g>
+          <g class="e" data-f="form"><polyline class="edge" points="822,292 822,340"/><text class="el" x="828" y="321">rendrer</text></g>
+          <g class="e" data-f="page"><polyline class="edge" points="920,266 1031,266 1031,340"/><text class="el" x="975" y="259" text-anchor="middle">én per oppgave</text></g>
+          <g class="e" data-f="form"><polyline class="edge net" points="822,392 822,440"/><text class="el" x="828" y="421">server action (POST)</text></g>
+          <g class="e" data-f="form"><polyline class="edge" points="822,492 822,584"/><text class="el code" x="814" y="545" text-anchor="end">service.create()</text></g>
+          <g class="e" data-f="client rest page form"><polyline class="edge" points="880,616 932,616"/><text class="el" x="906" y="608" text-anchor="middle">bruker</text></g>
+          <g class="e" data-f="client rest page form"><polyline class="edge" points="598,648 598,748"/><text class="el code" x="604" y="702">findMany / create</text></g>
+          <g class="e" data-f="client rest page form"><polyline class="edge" points="598,800 598,870"/><text class="el code" x="604" y="840">db.query / db.insert</text></g>
+          <g class="e" data-f="client rest page form"><polyline class="edge" points="500,896 400,896"/><text class="el" x="450" y="888" text-anchor="middle">bruker</text></g>
+          <g class="e" data-f="client rest page form"><polyline class="edge" points="696,896 952,896"/><text class="el" x="824" y="888" text-anchor="middle">SQL via env.DB</text></g>
+          <g class="e" data-f=""><polyline class="edge" points="1031,966 1031,938"/><text class="el" x="1022" y="958" text-anchor="end">tømmer + fyller</text></g>
+
+          <!-- 1 inngang -->
+          <a class="node l-entry" href="#f-worker" data-f="client rest page"><rect x="420" y="26" width="300" height="52" rx="6"/><text class="nn" x="434" y="47">worker.tsx</text><text class="nr" x="434" y="65">defineApp: alle ruter i rekkefølge</text></a>
+
+          <!-- 2 mottak + nettleser -->
+          <a class="node l-client" href="#f-TasksPageClient" data-f="client"><rect x="20" y="140" width="176" height="52" rx="6"/><text class="nn" x="32" y="161">TasksPageClient.tsx</text><text class="nr" x="32" y="179">side /tasks-client</text></a>
+          <a class="node l-recv" href="#f-TasksPage" data-f="page"><rect x="500" y="140" width="196" height="52" rx="6"/><text class="nn" x="512" y="161">TasksPage.tsx</text><text class="nr" x="512" y="179">side /tasks, på serveren</text></a>
+          <a class="node l-client" href="#f-task-api" data-f="client"><rect x="20" y="240" width="176" height="52" rx="6"/><text class="nn" x="32" y="261">task-api.ts</text><text class="nr" x="32" y="279">fetch i nettleseren</text></a>
+          <a class="node l-recv" href="#f-task-routes" data-f="client rest"><rect x="276" y="240" width="196" height="52" rx="6"/><text class="nn" x="288" y="261">task-routes.ts</text><text class="nr" x="288" y="279">URL + metode → funksjon</text></a>
+          <a class="node l-client" href="#f-TaskList" data-f="page form"><rect x="724" y="240" width="196" height="52" rx="6"/><text class="nn" x="736" y="261">TaskList.tsx</text><text class="nr" x="736" y="279">skjema + liste</text></a>
+          <a class="node l-recv" href="#f-task-controller" data-f="client rest"><rect x="276" y="340" width="196" height="52" rx="6"/><text class="nn" x="288" y="361">task-controller.ts</text><text class="nr" x="288" y="379">request inn, Response ut</text></a>
+          <a class="node l-client" href="#f-CreateTaskForm" data-f="form"><rect x="724" y="340" width="196" height="52" rx="6"/><text class="nn" x="736" y="361">CreateTaskForm.tsx</text><text class="nr" x="736" y="379">skjemaet «Ny oppgave»</text></a>
+          <a class="node l-client" href="#f-TaskItem" data-f="page"><rect x="942" y="340" width="178" height="52" rx="6"/><text class="nn" x="954" y="361">TaskItem.tsx</text><text class="nr" x="954" y="379">én rad i listen</text></a>
+          <a class="node l-recv" href="#f-actions" data-f="form"><rect x="724" y="440" width="196" height="52" rx="6"/><text class="nn" x="736" y="461">actions.ts</text><text class="nr" x="736" y="479">"use server"</text></a>
+
+          <!-- 3 logikk -->
+          <a class="node l-logic" href="#f-task-service" data-f="client rest page form"><rect x="276" y="584" width="604" height="64" rx="6"/><text class="nb" x="292" y="611">task-service.ts</text><text class="nr" x="292" y="632">reglene: sjekk input → hent eller lagre → gjør om til DTO</text></a>
+          <g data-f="client rest page form"><rect class="grp" x="932" y="546" width="196" height="158" rx="8"/><text class="gt" x="942" y="562">HJELPERE</text></g>
+          <a class="node l-logic" href="#f-task-schema" data-f="rest form"><rect x="942" y="570" width="176" height="28" rx="5"/><text class="ns" x="952" y="588">task-schema.ts</text></a>
+          <a class="node l-logic" href="#f-validate-task" data-f="rest form"><rect x="942" y="604" width="176" height="28" rx="5"/><text class="ns" x="952" y="622">validate-task.ts</text></a>
+          <a class="node l-logic" href="#f-validate-list-params" data-f="client page"><rect x="942" y="638" width="176" height="28" rx="5"/><text class="ns" x="952" y="656">validate-list-params.ts</text></a>
+          <a class="node l-logic" href="#f-task-mapper" data-f="client rest page form"><rect x="942" y="672" width="176" height="28" rx="5"/><text class="ns" x="952" y="690">task-mapper.ts</text></a>
+
+          <!-- 4 datatilgang -->
+          <a class="node l-access" href="#f-task-repository" data-f="client rest page form"><rect x="500" y="748" width="196" height="52" rx="6"/><text class="nn" x="512" y="769">task-repository.ts</text><text class="nr" x="512" y="787">eneste som rører db</text></a>
+
+          <!-- 5 database -->
+          <a class="node l-db" href="#f-db-index" data-f="client rest page form"><rect x="500" y="870" width="196" height="52" rx="6"/><text class="nn" x="512" y="891">db/index.ts</text><text class="nr" x="512" y="909">drizzle(env.DB)</text></a>
+          <g data-f="client rest page form"><rect class="grp" x="20" y="852" width="380" height="114" rx="8"/><text class="gt" x="32" y="869">TABELLER OG RELASJONER</text></g>
+          <a class="node l-db" href="#f-db-task-schema" data-f="client rest page form"><rect x="32" y="878" width="172" height="32" rx="5"/><text class="ns" x="42" y="898">schema/task-schema.ts</text></a>
+          <a class="node l-db" href="#f-db-user-schema" data-f="client rest page form"><rect x="216" y="878" width="172" height="32" rx="5"/><text class="ns" x="226" y="898">schema/user-schema.ts</text></a>
+          <a class="node l-db" href="#f-relations" data-f="client rest page form"><rect x="32" y="920" width="172" height="32" rx="5"/><text class="ns" x="42" y="940">relations.ts</text></a>
+          <a class="node l-db" href="#f-db-schema-index" data-f="client rest page form"><rect x="216" y="920" width="172" height="32" rx="5"/><text class="ns" x="226" y="940">schema/index.ts</text></a>
+          <g class="node l-db" data-f="client rest page form">
+            <path d="M952,870 V926 A79,10 0 0 0 1110,926 V870"/>
+            <ellipse cx="1031" cy="870" rx="79" ry="10"/>
+            <text class="nn" x="1031" y="902" text-anchor="middle">Cloudflare D1</text>
+            <text class="nr" x="1031" y="919" text-anchor="middle">SQLite: users, tasks</text>
+          </g>
+          <a class="node l-db" href="#f-seed" data-f=""><rect x="962" y="966" width="138" height="30" rx="5"/><text class="ns" x="974" y="985">seed.ts</text></a>
+        </svg>
+      </div>
+      <figcaption class="legend">
+        <span><i class="sw l-entry"></i>Inngang</span>
+        <span><i class="sw l-recv"></i>Mottak (server)</span>
+        <span><i class="sw l-client"></i>Nettleser</span>
+        <span><i class="sw l-logic"></i>Logikk</span>
+        <span><i class="sw l-access"></i>Datatilgang</span>
+        <span><i class="sw l-db"></i>Database</span>
+        <span><i class="ln"></i>kall i samme prosess</span>
+        <span><i class="ln net"></i>over nettverket (HTTP)</span>
+      </figcaption>
+    </figure>
+
+    <div class="steps" id="steps" aria-live="polite">
+      <h3>Tre veier inn, én vei ned</h3>
+      <p>Controlleren, <code>TasksPage.tsx</code> og <code>actions.ts</code> tar imot på hver sin måte, men alle tre kaller den samme <code>task-service.ts</code>. Derfor ligger reglene for en oppgave bare ett sted, og alle veier ender i samme repository og samme database.</p>
+    </div>
+  </section>
+
+  <section id="filer" aria-labelledby="h-filer">
+    <h2 id="h-filer">Filene, mappe for mappe</h2>
+    <p class="intro read">Treet til venstre viser mappene slik de ser ut i editoren. Klikk på en fil for å hoppe til forklaringen.</p>
+
+    <div class="files">
+      <nav class="tree" aria-label="Filtre">
+        <ul>
+          <li><span class="dir">src/</span>
+            <ul>
+              <li><span class="dir">db/</span>
+                <ul>
+                  <li><span class="dir">schema/</span>
+                    <ul>
+                      <li><a href="#f-db-schema-index" class="l-db"><i class="dot"></i>index.ts</a></li>
+                      <li><a href="#f-db-task-schema" class="l-db"><i class="dot"></i>task-schema.ts</a></li>
+                      <li><a href="#f-db-user-schema" class="l-db"><i class="dot"></i>user-schema.ts</a></li>
+                    </ul>
+                  </li>
+                  <li><a href="#f-db-index" class="l-db"><i class="dot"></i>index.ts</a></li>
+                  <li><a href="#f-relations" class="l-db"><i class="dot"></i>relations.ts</a></li>
+                  <li><a href="#f-seed" class="l-db"><i class="dot"></i>seed.ts</a></li>
+                </ul>
+              </li>
+              <li><span class="dir">features/</span>
+                <ul>
+                  <li><span class="dir muted">__tests__/</span></li>
+                  <li><span class="dir">components/</span>
+                    <ul>
+                      <li><a href="#f-CreateTaskForm" class="l-client"><i class="dot"></i>CreateTaskForm.tsx</a></li>
+                      <li><a href="#f-TaskItem" class="l-client"><i class="dot"></i>TaskItem.tsx</a></li>
+                      <li><a href="#f-TaskList" class="l-client"><i class="dot"></i>TaskList.tsx</a></li>
+                    </ul>
+                  </li>
+                  <li><span class="dir">pages/</span>
+                    <ul>
+                      <li><a href="#f-TasksPage" class="l-recv"><i class="dot"></i>TasksPage.tsx</a></li>
+                      <li><a href="#f-TasksPageClient" class="l-client"><i class="dot"></i>TasksPageClient.tsx</a></li>
+                    </ul>
+                  </li>
+                  <li><span class="dir">utils/</span>
+                    <ul>
+                      <li><a href="#f-date" class="l-logic"><i class="dot"></i>date.ts</a></li>
+                      <li><a href="#f-parse-params" class="l-recv"><i class="dot"></i>parse-params.ts</a></li>
+                      <li><a href="#f-validate-list-params" class="l-logic"><i class="dot"></i>validate-list-params.ts</a></li>
+                      <li><a href="#f-validate-task" class="l-logic"><i class="dot"></i>validate-task.ts</a></li>
+                    </ul>
+                  </li>
+                  <li><a href="#f-actions" class="l-recv"><i class="dot"></i>actions.ts</a></li>
+                  <li><a href="#f-task-api" class="l-client"><i class="dot"></i>task-api.ts</a></li>
+                  <li><a href="#f-task-controller" class="l-recv"><i class="dot"></i>task-controller.ts</a></li>
+                  <li><a href="#f-task-mapper" class="l-logic"><i class="dot"></i>task-mapper.ts</a></li>
+                  <li><a href="#f-task-repository" class="l-access"><i class="dot"></i>task-repository.ts</a></li>
+                  <li><a href="#f-task-routes" class="l-recv"><i class="dot"></i>task-routes.ts</a></li>
+                  <li><a href="#f-task-schema" class="l-logic"><i class="dot"></i>task-schema.ts</a></li>
+                  <li><a href="#f-task-service" class="l-logic"><i class="dot"></i>task-service.ts</a></li>
+                </ul>
+              </li>
+              <li><a href="#f-worker" class="l-entry"><i class="dot"></i>worker.tsx</a></li>
+            </ul>
+          </li>
+        </ul>
+      </nav>
+
+      <div>
+        <div class="folder">
+          <h3>src/<b>worker.tsx</b></h3>
+          <div class="file l-entry" id="f-worker">
+            <div class="fname"><code>worker.tsx</code><span class="chip">Inngang</span></div>
+            <div class="fdesc">
+              <p>Startpunktet for hele appen. <code>defineApp</code> er en liste som leses ovenfra og ned for hver forespørsel: først felles headere (<code>setCommonHeaders</code>), så API-rutene fra <code>taskRoutes</code>, så <code>/api/status</code>, og til slutt sidene som vises inni <code>Document</code>: <code>/</code>, <code>/tasks</code> og <code>/tasks-client</code>.</p>
+              <p class="uses">Bruker: <code>task-routes.ts</code>, <code>pages/TasksPage.tsx</code>, <code>pages/TasksPageClient.tsx</code></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/<b>features/</b></h3>
+          <p class="fnote">Alt som handler om oppgaver. Filene på toppnivå er lagene; undermappene er sider, komponenter og hjelpere.</p>
+
+          <div class="file l-recv" id="f-task-routes">
+            <div class="fname"><code>task-routes.ts</code><span class="chip">Mottak</span></div>
+            <div class="fdesc">
+              <p>Oversikten over API-et. Kobler URL og HTTP-metode til riktig funksjon i controlleren: <code>GET</code>/<code>POST</code> på <code>/api/v1/tasks</code>, <code>GET</code>/<code>PUT</code>/<code>DELETE</code> på <code>/api/v1/tasks/:id</code> og <code>POST</code> på <code>/api/v1/tasks/:id/:action</code>. Her kan mellomvare som <code>requireUser</code> legges inn senere.</p>
+              <p class="uses">Bruker: <code>task-controller.ts</code></p>
+            </div>
+          </div>
+
+          <div class="file l-recv" id="f-task-controller">
+            <div class="fname"><code>task-controller.ts</code><span class="chip">Mottak</span></div>
+            <div class="fdesc">
+              <p>Oversetter mellom HTTP og resten av appen. Leser det som kommer inn (query-parametre, JSON-body), kaller service, og gjør svaret om til en <code>Response</code> med statuskode: 200 for listen, 201 for ny oppgave, og ellers koden fra feilen (400 eller 500).</p>
+              <p class="uses">Bruker: <code>task-service.ts</code>, <code>utils/parse-params.ts</code></p>
+            </div>
+          </div>
+
+          <div class="file l-recv" id="f-actions">
+            <div class="fname"><code>actions.ts</code><span class="chip">Mottak</span></div>
+            <div class="fdesc">
+              <p>Server action (<code>"use server"</code>). Skjemaet i nettleseren kaller <code>createTaskAction</code> som om den var en vanlig funksjon, og React sender kallet som en POST til serveren. Funksjonen leser <code>title</code> og <code>dueDate</code> fra <code>FormData</code>, kaller <code>service.create</code> og sender tilbake enten den nye oppgaven, eller feilene sammen med det brukeren skrev.</p>
+              <p class="uses">Bruker: <code>task-service.ts</code>, <code>lib/demo-chaos.ts</code></p>
+            </div>
+          </div>
+
+          <div class="file l-client" id="f-task-api">
+            <div class="fname"><code>task-api.ts</code><span class="chip">Nettleser</span></div>
+            <div class="fdesc">
+              <p>Kode for nettleseren som snakker med REST-API-et. <code>listTasks()</code> henter oppgaver og <code>createTask()</code> lager en ny, begge med <code>fetch</code>. Hvis serveren ikke svarer, gir <code>listTasks</code> tilbake et vanlig <code>{ ok: false }</code>-svar i stedet for å krasje.</p>
+              <p class="uses">Bruker: <code>fetch</code> mot <code>/api/v1/tasks</code></p>
+            </div>
+          </div>
+
+          <div class="file l-logic" id="f-task-service">
+            <div class="fname"><code>task-service.ts</code><span class="chip">Logikk</span></div>
+            <div class="fdesc">
+              <p>Hjernen. Her ligger reglene for oppgaver: sjekk at input har riktig form, sjekk reglene, be repository om data, og gjør databaseradene om til DTO-er. Filen vet ingenting om HTTP eller SQL. Derfor kan alle tre inngangene bruke den.</p>
+              <p class="uses">Bruker: <code>task-repository.ts</code>, <code>task-schema.ts</code>, <code>task-mapper.ts</code>, <code>utils/validate-task.ts</code>, <code>utils/validate-list-params.ts</code></p>
+            </div>
+          </div>
+
+          <div class="file l-logic" id="f-task-schema">
+            <div class="fname"><code>task-schema.ts</code><span class="chip">Logikk</span></div>
+            <div class="fdesc">
+              <p>Zod-skjemaet for input. Beskriver hva en ny oppgave kan inneholde: <code>title</code> (tekst, trimmes), <code>completed</code> (valgfri) og <code>dueDate</code> (gjøres om fra tekst til <code>Date</code>). <code>updateTaskSchema</code> er det samme, bare med alle felt valgfrie.</p>
+              <p class="uses">Ikke å forveksle med <code>db/schema/task-schema.ts</code>, som beskriver tabellen.</p>
+            </div>
+          </div>
+
+          <div class="file l-logic" id="f-task-mapper">
+            <div class="fname"><code>task-mapper.ts</code><span class="chip">Logikk</span></div>
+            <div class="fdesc">
+              <p><code>toTaskDTO</code> gjør en databaserad om til det klienten skal se. Den tar med <code>id</code>, <code>title</code>, <code>completed</code>, <code>dueDate</code> og <code>createdAt</code> (som tekst), og lar <code>userId</code> bli igjen på serveren. <code>TaskDTO</code>-typen brukes av sidene og komponentene.</p>
+              <p class="uses">Bruker: <code>Task</code>-typen fra <code>db/schema</code></p>
+            </div>
+          </div>
+
+          <div class="file l-access" id="f-task-repository">
+            <div class="fname"><code>task-repository.ts</code><span class="chip">Datatilgang</span></div>
+            <div class="fdesc">
+              <p>Det eneste stedet i <code>features/</code> som snakker med databasen. <code>findMany</code> filtrerer på <code>completed</code>, søker i tittelen med <code>q</code>, sorterer nyeste først og begrenser med <code>limit</code>. <code>create</code> setter inn en rad og får den tilbake. Databasefeil fanges og blir til <code>{ ok: false, code: "500" }</code>.</p>
+              <p class="uses">Bruker: <code>db</code> fra <code>db/index.ts</code>, <code>tasks</code>-tabellen fra <code>db/schema</code></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/features/<b>pages/</b></h3>
+          <div class="file l-recv" id="f-TasksPage">
+            <div class="fname"><code>TasksPage.tsx</code><span class="chip">Mottak</span></div>
+            <div class="fdesc">
+              <p>Serverkomponent for <code>/tasks</code>. Henter oppgavene direkte fra service, uten <code>fetch</code>, fordi koden allerede kjører på serveren. Mens den venter, viser <code>Suspense</code> et skjelett. Går noe galt, vises feilmeldingen; ellers <code>TaskList</code>.</p>
+              <p class="uses">Bruker: <code>task-service.ts</code>, <code>utils/parse-params.ts</code>, <code>components/TaskList.tsx</code></p>
+            </div>
+          </div>
+          <div class="file l-client" id="f-TasksPageClient">
+            <div class="fname"><code>TasksPageClient.tsx</code><span class="chip">Nettleser</span></div>
+            <div class="fdesc">
+              <p>Klientkomponent for <code>/tasks-client</code>. Viser den andre måten å hente data på: siden kommer tom, og <code>useEffect</code> henter oppgavene via <code>task-api.ts</code> etterpå. Fin å sammenligne med <code>TasksPage</code>.</p>
+              <p class="uses">Bruker: <code>task-api.ts</code></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/features/<b>components/</b></h3>
+          <div class="file l-client" id="f-TaskList">
+            <div class="fname"><code>TaskList.tsx</code><span class="chip">Nettleser</span></div>
+            <div class="fdesc">
+              <p>Viser skjemaet for ny oppgave og én <code>TaskItem</code> per oppgave. Sender <code>createTaskAction</code> videre til skjemaet som prop.</p>
+              <p class="uses">Bruker: <code>CreateTaskForm.tsx</code>, <code>TaskItem.tsx</code>, <code>actions.ts</code></p>
+            </div>
+          </div>
+          <div class="file l-client" id="f-CreateTaskForm">
+            <div class="fname"><code>CreateTaskForm.tsx</code><span class="chip">Nettleser</span></div>
+            <div class="fdesc">
+              <p>Skjemaet «Ny oppgave». <code>useActionState</code> kjører server action og tar vare på svaret: <code>isPending</code> gir «Lagrer…» på knappen, og feltfeil for <code>title</code> og <code>dueDate</code> vises under feltene. Ved feil fylles feltene inn igjen med det brukeren skrev.</p>
+            </div>
+          </div>
+          <div class="file l-client" id="f-TaskItem">
+            <div class="fname"><code>TaskItem.tsx</code><span class="chip">Nettleser</span></div>
+            <div class="fdesc">
+              <p>Én rad i listen: avkrysningsboks, tittel (gjennomstreket når den er ferdig), frist og Slett-knapp.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/features/<b>utils/</b></h3>
+          <div class="file l-recv" id="f-parse-params">
+            <div class="fname"><code>parse-params.ts</code><span class="chip">Mottak</span></div>
+            <div class="fdesc">
+              <p>Gjør <code>?completed=true&amp;q=melk</code> om til <code>{ completed: "true", q: "melk" }</code>. Alt er fortsatt tekst; sjekken skjer i service.</p>
+            </div>
+          </div>
+          <div class="file l-logic" id="f-validate-list-params">
+            <div class="fname"><code>validate-list-params.ts</code><span class="chip">Logikk</span></div>
+            <div class="fdesc">
+              <p>Sjekker og gjør om listeparametrene: <code>completed</code> må være <code>"true"</code> eller <code>"false"</code> og blir en boolean, <code>q</code> trimmes, og <code>limit</code> blir et tall med øvre grense <code>LIST_LIMIT_MAX</code> (100). Ved feil svarer den med hvilket felt som er galt.</p>
+            </div>
+          </div>
+          <div class="file l-logic" id="f-validate-task">
+            <div class="fname"><code>validate-task.ts</code><span class="chip">Logikk</span></div>
+            <div class="fdesc">
+              <p>Reglene for en oppgave: tittelen kan ikke være tom eller lengre enn 200 tegn, og fristen kan ikke være før i dag (norsk tid, <code>Europe/Oslo</code>).</p>
+              <p class="uses">Bruker: <code>date.ts</code></p>
+            </div>
+          </div>
+          <div class="file l-logic" id="f-date">
+            <div class="fname"><code>date.ts</code><span class="chip">Logikk</span></div>
+            <div class="fdesc">
+              <p>Dato-hjelpere. <code>startOfToday</code> finner midnatt i dag i norsk tid, <code>defaultDueDate</code> gir en dato én uke frem.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/<b>db/</b></h3>
+          <p class="fnote">Alt om selve databasen. Ingen regler for oppgaver her, bare hvordan dataene ser ut og hvordan vi kobler til.</p>
+          <div class="file l-db" id="f-db-index">
+            <div class="fname"><code>index.ts</code><span class="chip">Database</span></div>
+            <div class="fdesc">
+              <p>Lager databaseklienten. <code>drizzle(env.DB, { relations })</code> kobler Drizzle til D1-databasen som heter <code>DB</code> i <code>wrangler.jsonc</code>. Eksporterer <code>db</code>, som repository bruker, og typen <code>DB</code>.</p>
+              <p class="uses">Bruker: <code>schema/</code>, <code>relations.ts</code></p>
+            </div>
+          </div>
+          <div class="file l-db" id="f-relations">
+            <div class="fname"><code>relations.ts</code><span class="chip">Database</span></div>
+            <div class="fdesc">
+              <p>Forteller Drizzle hvordan tabellene henger sammen: en bruker har mange oppgaver, og en oppgave har én bruker. Gjør at <code>db.query</code> kan hente relaterte rader.</p>
+            </div>
+          </div>
+          <div class="file l-db" id="f-seed">
+            <div class="fname"><code>seed.ts</code><span class="chip">Database</span></div>
+            <div class="fdesc">
+              <p>Testdata. Tømmer tabellene og legger inn brukeren «Test Testesen» med to oppgaver. Kjøres med <code>npm run seed</code>, ikke av appen selv.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/db/<b>schema/</b></h3>
+          <div class="file l-db" id="f-db-task-schema">
+            <div class="fname"><code>task-schema.ts</code><span class="chip">Database</span></div>
+            <div class="fdesc">
+              <p>Beskriver <code>tasks</code>-tabellen i TypeScript: <code>id</code> (lages med nanoid), <code>title</code>, <code>completed</code>, <code>due_date</code>, <code>user_id</code> (peker på en bruker og slettes sammen med den) og <code>created_at</code>. Gir også typene <code>Task</code>, <code>CreateTask</code> og <code>UpdateTask</code> som resten av appen bruker.</p>
+              <p class="uses">Bruker: <code>user-schema.ts</code>, <code>lib/id.ts</code></p>
+            </div>
+          </div>
+          <div class="file l-db" id="f-db-user-schema">
+            <div class="fname"><code>user-schema.ts</code><span class="chip">Database</span></div>
+            <div class="fdesc">
+              <p><code>users</code>-tabellen: <code>id</code> (teller oppover), <code>name</code> og <code>email</code> (må være unik). Typene <code>User</code> og <code>CreateUser</code>.</p>
+            </div>
+          </div>
+          <div class="file l-db" id="f-db-schema-index">
+            <div class="fname"><code>index.ts</code><span class="chip">Database</span></div>
+            <div class="fdesc">
+              <p>Samler tabellene i én import, så andre filer kan skrive <code>import { tasks } from "@/db/schema"</code>.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="extra">
+          <p><b>Utenfor de tre mappene:</b> <code>lib/id.ts</code> lager id-er til <code>tasks</code>-tabellen. <code>lib/demo-chaos.ts</code> legger på kunstig ventetid i dev, så du rekker å se skjelett og «Lagrer…».</p>
+          <p><code>drizzle/migrations/</code> er SQL generert fra schema-filene med <code>npm run migrate:new</code>. Det er den som faktisk lager tabellene i D1 når du kjører <code>npm run migrate:dev</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="steg" aria-labelledby="h-steg">
+    <h2 id="h-steg">En ny oppgave, steg for steg</h2>
+    <p class="intro read">Slik ser dataene ut i hvert lag når noen sender <code>POST /api/v1/tasks</code>. Legg merke til at formen endrer seg litt for hver fil.</p>
+
+    <ol class="trace">
+      <li class="l-client">
+        <div class="t-file"><code>klienten</code></div>
+        <p class="t-what">Sender en forespørsel med JSON. Det kan være <code>task-api.ts</code>, Postman eller curl.</p>
+        <pre><code>POST /api/v1/tasks
+{ "title": "  Kjøpe melk ", "dueDate": "2026-10-10" }</code></pre>
+      </li>
+      <li class="l-recv">
+        <div class="t-file"><code>task-routes.ts</code></div>
+        <p class="t-what"><code>worker.tsx</code> går gjennom rutene. Den første som passer er <code>/api/v1/tasks</code> med <code>post</code>.</p>
+        <pre><code>route("/api/v1/tasks", { post: controller.create })</code></pre>
+      </li>
+      <li class="l-recv">
+        <div class="t-file"><code>task-controller.ts</code></div>
+        <p class="t-what">Leser body. Controlleren vet ikke om dataene er gyldige, og det er heller ikke dens jobb.</p>
+        <pre><code>const body = await request.json(); // unknown
+await service.create(body);</code></pre>
+      </li>
+      <li class="l-logic">
+        <div class="t-file"><code>task-schema.ts</code></div>
+        <p class="t-what">Service kjører zod-skjemaet. Tittelen trimmes og datoteksten blir en ekte dato.</p>
+        <pre><code>{ title: "Kjøpe melk", dueDate: Date(2026-10-10) }</code></pre>
+      </li>
+      <li class="l-logic">
+        <div class="t-file"><code>validate-task.ts</code></div>
+        <p class="t-what">Reglene sjekkes: ikke tom, maks 200 tegn, frist ikke i fortiden. Så legger service til <code>userId</code> (fast 1 til innlogging er på plass).</p>
+        <pre><code>{ title: "Kjøpe melk", dueDate: Date(…), userId: 1 }</code></pre>
+      </li>
+      <li class="l-access">
+        <div class="t-file"><code>task-repository.ts</code></div>
+        <p class="t-what">Setter inn raden og ber om å få den tilbake.</p>
+        <pre><code>db.insert(tasks).values(data).returning().get()</code></pre>
+      </li>
+      <li class="l-db">
+        <div class="t-file"><code>db/ + D1</code></div>
+        <p class="t-what">Drizzle fyller inn <code>id</code> og <code>createdAt</code> fra schema-filen, D1 setter <code>completed</code> til false, og hele raden kommer tilbake.</p>
+        <pre><code>{ id: "V1StGXR8_Z5jdHi6B-myT", title: "Kjøpe melk",
+  completed: false, dueDate: Date(…), userId: 1,
+  createdAt: Date(…) }</code></pre>
+      </li>
+      <li class="l-logic">
+        <div class="t-file"><code>task-mapper.ts</code></div>
+        <p class="t-what">Raden blir en DTO. <code>userId</code> blir igjen på serveren, og <code>createdAt</code> blir tekst.</p>
+        <pre><code>{ id, title, completed: false, dueDate,
+  createdAt: "2026-10-07T10:41:25.000Z" }</code></pre>
+      </li>
+      <li class="l-recv">
+        <div class="t-file"><code>task-controller.ts</code></div>
+        <p class="t-what">Svaret pakkes inn og sendes tilbake med status 201.</p>
+        <pre><code>201 Created
+{ "ok": true, "data": { "id": "V1StGXR8_Z5jdHi6B-myT", … } }</code></pre>
+      </li>
+    </ol>
+
+    <div class="fail">
+      <div>
+        <h3>Hvis tittelen er tom</h3>
+        <p>Da stopper det i steg 5. <code>validate-task.ts</code> sier nei, service lager et feilsvar med kode <code>"400"</code>, og controlleren bruker koden som HTTP-status. Repository og databasen blir aldri spurt.</p>
+      </div>
+      <pre><code>400 Bad Request
+{ "ok": false, "error": {
+    "code": "400", "message": "Ikke gyldig data",
+    "fieldErrors": { "title": ["Tittel kan ikke være tom"] } } }</code></pre>
+    </div>
+  </section>
+
+  <section id="monstre" aria-labelledby="h-monstre">
+    <h2 id="h-monstre">To mønstre som går igjen</h2>
+    <p class="intro read">Når du har skjønt disse to, kan du lese alle filene i <code>features/</code>.</p>
+    <div class="pair">
+      <div class="panel">
+        <h3>Hvert lag får laget under seg som argument</h3>
+        <p>Nederst i hver fil lages laget med en <code>create…</code>-funksjon, og laget under sendes inn:</p>
+<pre><code><span class="cm">// task-repository.ts</span>
+export const repository = createTaskRepository(db);
+<span class="cm">// task-service.ts</span>
+export const service = createTaskService(repository);
+<span class="cm">// task-controller.ts</span>
+export const controller = createTaskController(service);</code></pre>
+        <p>I appen sendes den ekte D1-databasen inn. I testene sendes en SQLite-database i minnet inn i stedet. Service-koden er helt lik, så testene sjekker de ekte reglene uten Cloudflare.</p>
+<pre><code><span class="cm">// __tests__/task-service.test.ts</span>
+db = drizzle({ client: new Database(":memory:"), relations });
+service = createTaskService(createTaskRepository(db));</code></pre>
+      </div>
+      <div class="panel">
+        <h3>Alle lag svarer med samme form</h3>
+        <p>Ingen lag kaster feil oppover. Alle svarer med enten suksess eller en beskrevet feil:</p>
+<pre><code>| { ok: true;  data: TaskDTO }
+| { ok: false; error: {
+      code: "400" | "500";
+      message: string;
+      fieldErrors: Record&lt;string, string[]&gt; } }</code></pre>
+        <p>Repository fanger databasefeil og gir <code>"500"</code>. Service gir <code>"400"</code> for ugyldig input. Controlleren gjør <code>code</code> om til HTTP-status, mens <code>TasksPage</code> og skjemaet viser <code>message</code> og <code>fieldErrors</code> til brukeren.</p>
+        <p>Hvert lag sjekker <code>if (!result.ok) return result;</code> og sender feilen videre uendret.</p>
+      </div>
+    </div>
+
+    <div class="todo">
+      <h3>Ikke ferdig ennå</h3>
+      <ul>
+        <li><code>find</code>, <code>update</code>, <code>remove</code> og <code>action</code> finnes i rutene, men controller, service og repository returnerer bare <code>null</code>. Rutene på <code>/api/v1/tasks/:id</code> gir derfor ikke et gyldig svar foreløpig.</li>
+        <li>Slett-knappen i <code>TaskItem</code> logger bare til konsollen, og avkrysningsboksen er ikke koblet til noe.</li>
+        <li><code>userId</code> er fast satt til 1 til innlogging er på plass.</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>Laget fra koden i <code>webapp/tasks/src</code>, commit faf4c26, 7. oktober 2026.</footer>
+</div>
+
+<script>
+(function () {
+  var FLOWS = {
+    all: null,
+    page: {
+      title: "Siden /tasks (serverside)",
+      steps: [
+        "Nettleseren ber om <code>/tasks</code>. <code>worker.tsx</code> rendrer <code>TasksPage.tsx</code> på serveren.",
+        "Siden sender skjelettet med en gang (<code>Suspense</code>) mens den venter på data.",
+        "<code>Tasks</code> kaller <code>service.list()</code> direkte. Ingen fetch og ingen controller, for koden kjører allerede på serveren.",
+        "Service sjekker parametrene med <code>validate-list-params.ts</code>, repository henter radene, og <code>task-mapper.ts</code> lager DTO-er.",
+        "<code>TaskList</code> får listen som prop og viser én <code>TaskItem</code> per oppgave. Ferdig HTML strømmes til nettleseren."
+      ]
+    },
+    form: {
+      title: "Skjemaet (server action)",
+      steps: [
+        "Brukeren skriver i <code>CreateTaskForm</code> og trykker «Legg til».",
+        "<code>useActionState</code> kaller <code>createTaskAction</code> i <code>actions.ts</code>. React sender kallet som en POST til serveren.",
+        "<code>actions.ts</code> leser <code>title</code> og <code>dueDate</code> fra <code>FormData</code> og kaller <code>service.create()</code>.",
+        "Service sjekker input med <code>task-schema.ts</code> og <code>validate-task.ts</code>, repository lagrer, og <code>task-mapper.ts</code> lager DTO-en.",
+        "Svaret går tilbake til skjemaet. Ved feil vises feltfeilene, og feltene fylles inn igjen."
+      ]
+    },
+    rest: {
+      title: "REST-API: POST /api/v1/tasks",
+      steps: [
+        "En klient (Postman, curl eller <code>task-api.ts</code>) sender <code>POST /api/v1/tasks</code> med JSON.",
+        "<code>worker.tsx</code> finner ruten i <code>taskRoutes</code>, og <code>task-routes.ts</code> velger <code>controller.create</code>.",
+        "Controlleren leser body med <code>request.json()</code> og kaller <code>service.create()</code>.",
+        "Service sjekker formen med <code>task-schema.ts</code> og reglene med <code>validate-task.ts</code>, og legger til <code>userId</code>.",
+        "Repository setter inn raden i <code>tasks</code>-tabellen via <code>db</code>.",
+        "Service gjør raden om til en DTO med <code>task-mapper.ts</code>.",
+        "Controlleren svarer med status 201, eller 400/500 hvis noe feilet."
+      ]
+    },
+    client: {
+      title: "Siden /tasks-client (klientside)",
+      steps: [
+        "Nettleseren ber om <code>/tasks-client</code>. <code>worker.tsx</code> sender <code>TasksPageClient.tsx</code>, som kommer uten oppgaver.",
+        "<code>useEffect</code> kaller <code>listTasks()</code> i <code>task-api.ts</code>.",
+        "<code>task-api.ts</code> sender <code>fetch(\"/api/v1/tasks\")</code>, en helt ny HTTP-forespørsel inn til serveren.",
+        "<code>task-routes.ts</code> sender <code>GET</code> videre til <code>controller.list</code>.",
+        "Controlleren leser query-parametrene og kaller <code>service.list()</code>.",
+        "Service sjekker parametrene, repository henter radene, og mapper lager DTO-er.",
+        "Controlleren svarer med JSON og status 200. Komponenten legger listen i state og viser den."
+      ]
+    }
+  };
+
+  var svg = document.getElementById("map");
+  var stepsBox = document.getElementById("steps");
+  var restingHTML = stepsBox.innerHTML;
+  var buttons = document.querySelectorAll(".flowbtn");
+  var parts = svg.querySelectorAll("[data-f]");
+
+  function select(flow) {
+    var on = flow !== "all";
+    svg.classList.toggle("flowing", on);
+    parts.forEach(function (el) {
+      var hit = !on || el.getAttribute("data-f").split(" ").indexOf(flow) !== -1;
+      el.classList.toggle("dim", !hit);
+      el.classList.toggle("on", on && hit);
+    });
+    buttons.forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-flow") === flow));
+    });
+    var f = FLOWS[flow];
+    if (!f) { stepsBox.innerHTML = restingHTML; return; }
+    stepsBox.innerHTML = "<h3>" + f.title + "</h3><ol>" +
+      f.steps.map(function (s) { return "<li>" + s + "</li>"; }).join("") + "</ol>";
+  }
+
+  buttons.forEach(function (b) {
+    b.addEventListener("click", function () { select(b.getAttribute("data-flow")); });
+  });
+})();
+</script>
+</body>
+</html>

@@ -40,7 +40,7 @@ export function validateListParams(input: Params): ListParamsValidation {
     const limit = Number(input.limit);
 
     const isValidLimit =
-      Number.isInteger(limit) && limit > 1 && limit < LIST_LIMIT_MAX;
+      Number.isInteger(limit) && limit >= 1 && limit <= LIST_LIMIT_MAX;
 
     if (!isValidLimit) {
       return {
