@@ -5,6 +5,7 @@ import { TaskList } from "@/components/tasks/TaskList";
 import { TasksProvider, useTasks } from "@/contexts/TasksContext";
 import { TASKS } from "@/data/tasks";
 import { useIndexHook } from "@/hooks/useIndexHook";
+import { Link } from "expo-router";
 import { use, useEffect, useState } from "react";
 import { Text, View, StyleSheet, type Task } from "react-native";
 
@@ -23,6 +24,9 @@ export default function Index() {
       <Empty title={"Intet å vise"} onPress={myAwesomeFunction} />
 
       <Text>Edit src/app/index.tsx to edit this screen.</Text> */}
+      <Link href="/about">Gå til about</Link>
+      <Link href="/settings">Gå til settings</Link>
+      <Link href="/students">Gå til studenter</Link>
     </View>
   );
 }
