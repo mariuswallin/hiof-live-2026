@@ -12,6 +12,12 @@ import { expect, test, type Page } from "@playwright/test";
  */
 
 /** Falske svar - samme form som dummyjson, så zod-valideringen går gjennom. */
+
+/** Lista TasksContext henter ved oppstart (GET /todos?limit=8). */
+const MOCK_TODOS = [
+  { id: 1, todo: "Lese om props", completed: true, userId: 1 },
+  { id: 3, todo: "Prøve FlatList", completed: false, userId: 68 },
+];
 const MOCK_TODO = { id: 3, todo: "Mocket todo fra testen", completed: false, userId: 68 };
 const MOCK_USER = {
   id: 68,
@@ -29,6 +35,7 @@ async function mockApi(page: Page) {
   await page.route("https://dummyjson.com/**", (route) => {
     const path = new URL(route.request().url()).pathname;
 
+    if (path === "/todos") return route.fulfill({ json: { todos: MOCK_TODOS } });
     if (path === "/todos/3") return route.fulfill({ json: MOCK_TODO });
     if (path === "/users/68") return route.fulfill({ json: MOCK_USER });
 
@@ -66,13 +73,28 @@ test("navigerer fra lista til detalj og videre til eier", async ({ page }) => {
 });
 
 test("viser feilmelding når API-et feiler", async ({ page }) => {
-  // Denne gangen svarer "serveren" med 500.
-  await page.route("https://dummyjson.com/**", (route) =>
-    route.fulfill({ status: 500 }),
-  );
+  // Lista går bra, men enkelt-oppgaven (useEffect i [id].tsx) svarer 500.
+  await page.route("https://dummyjson.com/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+
+    if (path === "/todos") return route.fulfill({ json: { todos: MOCK_TODOS } });
+    return route.fulfill({ status: 500 });
+  });
 
   await page.goto("/tasks/3");
 
   await expect(page.getByText("Klarte ikke å hente")).toBeVisible();
   await expect(page.getByText("Kunne ikke hente /todos/3 (500)")).toBeVisible();
+});
+
+test("viser feilmelding når lista ikke kan hentes", async ({ page }) => {
+  // Alt svarer 500 - også GET /todos i TasksContext.
+  await page.route("https://dummyjson.com/**", (route) =>
+    route.fulfill({ status: 500 }),
+  );
+
+  await page.goto("/tasks");
+
+  await expect(page.getByText("Klarte ikke å hente oppgaver")).toBeVisible();
+  await expect(page.getByText("Kunne ikke hente oppgaver (500)")).toBeVisible();
 });

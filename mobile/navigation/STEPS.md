@@ -39,7 +39,8 @@ Stack                      (src/app/_layout.tsx)
 │   │   └── Profil         /profile
 │   ├── Innstillinger      /settings
 │   └── Om appen           /about
-└── Ny oppgave (modal)     /new-task
+├── Ny oppgave (modal)     /new-task
+└── Admin (beskyttet)      /admin      kun role: "admin"
 ```
 
 3. Tommelfingerregel: **det som ligger ytterst, dekker det som ligger under.**
@@ -343,7 +344,7 @@ useEffect(() => {
 
 **Prøv**
 
-- Åpne oppgave 1–8 – hver har en «tvilling» i dummyjson.
+- Toggle en oppgave i «Lokalt» → «Fra API» endres ikke. API-et vet ikke om lokale endringer.
 - Fjern `aspectRatio` fra `styles.image` → bildet forsvinner.
 - Slå av nettet / skru på flymodus → feil-tilstand.
 - På web: legg en `console.log` i effekten og se at den kjører to ganger i dev.
@@ -444,7 +445,7 @@ bakgrunnen om det er nytt.
 
 **Mål:** En skjerm som legger seg over alt, og state som deles mellom skjermer.
 
-**Filer:** `src/app/new-task.tsx`, `src/app/_layout.tsx`, `src/contexts/TasksContext.tsx`,
+**Filer:** `src/app/new-task.tsx`, `src/app/_layout.tsx`, `src/contexts/TasksContext.tsx`, `src/api/dummy-json.ts`,
 `src/components/tasks/TaskRegister.tsx`
 
 **Vis**
@@ -456,6 +457,15 @@ bakgrunnen om det er nytt.
 4. «Avbryt»-knapp for Android.
 5. `TasksContext.tsx`: `TasksProvider` + `useTasks()`, state løftet over navigatoren.
    `toggle`/`add`/`remove` lager alltid ny array.
+6. Henting i contexten: `useState([])` i stedet for `useState(TASKS)`, og `useEffect` med
+   tomt array som henter `dummyjson.com/todos?limit=8`. Gå gjennom steg 1–5 i kommentarene:
+   `fetch` → `response.ok` → `response.json()` (`unknown`) → `TodosResponseSchema.parse`
+   → `todos.map(toTask)` → `setTasks`. Pluss `isLoading`/`error`, `AbortController` og
+   opprydding.
+7. `toTask`: API-et sier `todo`/`completed`/tall-id, appen sier `title`/`done`/streng-id.
+   Oversett én gang – `TaskItem`, `TaskList` osv. trenger ikke endres.
+8. Skjermene må tåle at lista ikke er hentet ennå: `tasks/index.tsx` og `[id].tsx` viser
+   `Loading` mens `isLoading` er `true`.
 
 **Prøv**
 
@@ -463,7 +473,9 @@ bakgrunnen om det er nytt.
 - Skriv 1–2 tegn → valideringsfeil.
 - Legg til en oppgave → lista og badgen oppdateres.
 - Åpne den nye oppgaven → API gir 404 → feil-tilstand i «Fra API».
-- Lukk appen helt og åpne igjen → den nye oppgaven er borte.
+- Åpne `https://dummyjson.com/todos?limit=8` i nettleseren – det er dette contexten får.
+- Refresh / lukk appen og åpne igjen → lista hentes på nytt, den nye oppgaven er borte.
+- Skru på flymodus og refresh → «Klarte ikke å hente oppgaver».
 
 **Spørsmål**
 
@@ -486,7 +498,17 @@ Alle som bruker `useTasks()` rendres på nytt når lista endres. For en liten ap
 helt greit. Med mye state kan man dele opp contexter eller bruke Zustand/Jotai.
 
 **Forsvinner oppgavene når jeg lukker appen?**
-Ja, alt ligger i minnet. Neste steg er AsyncStorage/SQLite lokalt, eller et API.
+Endringene, ja. Lista hentes fra API-et ved hver oppstart, men `toggle`/`add`/`remove`
+endrer bare state i minnet – API-et vet ingenting. Skal endringer overleve, må de sendes
+til API-et (POST/PATCH/DELETE) eller lagres lokalt (AsyncStorage/SQLite).
+
+**Hvorfor hente i contexten og ikke i `tasks/index.tsx`?**
+Flere skjermer trenger lista (Hjem, Oppgaver, detaljsiden, badgen). Henter vi i én skjerm,
+har de andre ingenting før den skjermen er åpnet. I contexten hentes den én gang for alle.
+
+**Hvorfor kan ikke `useEffect` være `async`?**
+En effekt kan returnere en oppryddingsfunksjon – en `async`-funksjon returnerer alltid et
+Promise. Derfor lager vi `async function loadTasks()` inni og kaller den.
 
 **Hvorfor feiler API-kallet for en oppgave jeg la til selv?**
 Nye oppgaver får `id` fra `Date.now()`, som ikke finnes i dummyjson → 404. Det er med
@@ -595,8 +617,9 @@ nytt ved hver oppstart.
    på nytt.
 3. `_layout.tsx`: `AuthProvider` ligger over navigatoren (og over `TasksProvider`), så
    den mountes én gang og aldri på nytt ved navigering.
-4. `profile.tsx` og `index.tsx`: begge leser `useAuth()`, ingen henter selv. Begge må tåle
-   at `user` er `null` rett etter oppstart.
+4. `_layout.tsx` → `RootNavigator`: mens `isLoading` er `true` vises bare «Henter bruker …».
+   Appen vises først når vi vet hvem brukeren er (viktig for rollen i neste steg).
+5. `profile.tsx` og `index.tsx`: begge leser `useAuth()`, ingen henter selv.
 
 **Prøv**
 
@@ -617,9 +640,68 @@ bare en kopi mens appen kjører.
 laster-tilstanden (`if (!user)`), i stedet for å vise tomme felter.
 
 **Hva med utlogging og innloggingsskjerm?**
-Utlogging = slett token + `setUser(null)`. En innloggingsskjerm legges typisk i en egen
-gruppe, f.eks. `(auth)/login.tsx`, og man sender brukeren dit med `router.replace` når
-`/me` svarer 401. Ikke med her – fokus er at brukeren hentes og deles via context.
+Utlogging = slett token + `setUser(null)`. En innloggingsskjerm løses med samme verktøy som
+i neste steg: `<Stack.Protected guard={!user}>` rundt `login` og `guard={!!user}` rundt
+resten. Ikke med her – fokus er at brukeren hentes og deles via context.
+
+---
+
+## Steg 12 – Rolle og beskyttet rute (`/admin`)
+
+**Mål:** En skjerm som bare finnes for brukere med riktig rolle.
+
+**Filer:** `src/api/auth.ts`, `src/contexts/AuthContext.tsx`, `src/app/_layout.tsx`,
+`src/app/admin.tsx`, `(tabs)/index.tsx`, `(tabs)/profile.tsx`
+
+**Vis**
+
+1. `api/auth.ts`: `role: z.enum(["admin", "user"])` på brukeren. To kontoer, og
+   `simulateLogin(role)` som later som vi logger inn med en annen.
+2. `AuthContext.tsx`: `isAdmin = user?.role === "admin"` – avledet, ikke egen state.
+   `loginAs(role)` henter `/me` på nytt.
+3. `_layout.tsx`:
+
+```tsx
+<Stack.Protected guard={isAdmin}>
+  <Stack.Screen name="admin" options={{ title: "Admin" }} />
+</Stack.Protected>
+```
+
+   `guard={false}` = ruten finnes ikke. Link, `router.push` og dyplenker til `/admin` sendes
+   til `/`. Står man *på* `/admin` når guard blir `false`, sendes man ut, og `/admin` fjernes
+   fra historikken.
+4. `admin.tsx` i rot-Stacken (som modalen): kan åpnes fra hvor som helst, ligger over skuff
+   og tabs. Skjermen sjekker ikke rollen selv – rendres den, er brukeren admin.
+5. `index.tsx`: lenken vises bare for admin. Men det er **ikke** beskyttelsen.
+
+**Prøv**
+
+- Som Ola: ingen admin-lenke på Hjem. Skriv `/admin` i adressefeltet → du havner på `/`.
+- Profil → «Logg inn som admin» → Hjem → «Åpne admin-panelet» → `/admin`.
+- «Bytt til vanlig bruker» på admin-siden → kastes ut til `/`.
+- Refresh mens du er admin → tilbake til Ola (den simulerte «tokenen» lå bare i minnet).
+
+**Spørsmål**
+
+**Er appen nå sikker?**
+Nei. `Stack.Protected` skjuler bare skjermen i appen. Koden og dataene kan fortsatt nås.
+API-et må selv sjekke rollen på hver forespørsel (403 hvis ikke admin).
+
+**Hvorfor holder det ikke å skjule lenken?**
+URL-er kan skrives inn eller komme som dyplenker. Uten `Stack.Protected` åpnes skjermen
+uansett hvordan man kom dit.
+
+**Hvorfor viser `_layout.tsx` «Henter bruker …» før appen?**
+Før `/me` har svart er `isAdmin` `false`. Viste vi navigatoren da, ville en admin som
+refresher på `/admin` bli kastet ut før svaret kom.
+
+**Hvorfor ligger `/admin` i rot-Stacken og ikke i skuffen eller tabs?**
+Da er den tilgjengelig fra hele appen og legger seg over alt, som modalen. Skal den vises i
+skuffen, brukes `Drawer.Protected` på samme måte – `Tabs.Protected` finnes også.
+
+**Kan jeg velge hvor man sendes?**
+I SDK 58 kommer `redirectTo` på `Protected`. I SDK 57 (dette prosjektet) sendes man til
+ankerskjermen, her `/`.
 
 ---
 
@@ -631,5 +713,6 @@ gruppe, f.eks. `(auth)/login.tsx`, og man sender brukeren dit med `router.replac
 | `TasksContext` valgfritt (alt på én skjerm) | `TasksContext` nødvendig (skjermer får ikke props)     |
 | `TaskList` med `TaskRegister` inni, `.map`  | `TaskList` med `FlatList`, `TaskRegister` i modal      |
 | `TaskLayout` tegner header                  | Navigatoren tegner header og tab-bar                  |
-| Data fra lokal konstant                     | Også data fra eksternt API (`useEffect` og `useQuery`) |
-| Ingen bruker                                | Innlogget bruker i `AuthContext`, hentet ved oppstart  |
+| `useState(TASKS)` – lokal konstant          | `useState([])` + `useEffect` – lista hentes fra API    |
+| Ingen bruker                                | Innlogget bruker med rolle i `AuthContext`             |
+| Ingen tilgangsstyring                       | `/admin` beskyttet med `Stack.Protected`               |

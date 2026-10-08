@@ -3,9 +3,8 @@ import { z } from "zod";
 /**
  * Et gratis test-API: https://dummyjson.com
  *
- * Vi validerer svaret med zod, akkurat som TASKS i demo-appen. Data fra
- * nettet er `unknown` til det motsatte er bevist - her får vi både sjekken
- * og TypeScript-typen fra samme skjema.
+ * Vi validerer svaret med zod. Data fra nettet er `unknown` til det motsatte
+ * er bevist - her får vi både sjekken og TypeScript-typen fra samme skjema.
  */
 const BASE_URL = "https://dummyjson.com";
 
@@ -17,6 +16,11 @@ export const TodoSchema = z.object({
 });
 
 export type Todo = z.infer<typeof TodoSchema>;
+
+/** Svaret fra GET /todos: { todos: [...], total, skip, limit }. Vi trenger bare todos. */
+export const TodosResponseSchema = z.object({
+  todos: z.array(TodoSchema),
+});
 
 export const UserSchema = z.object({
   id: z.number(),

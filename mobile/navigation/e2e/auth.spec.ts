@@ -13,10 +13,14 @@ import { expect, test } from "@playwright/test";
 test("henter brukeren ved oppstart og refresh, ikke ved navigasjon", async ({
   page,
 }) => {
-  // Avatar-bildet: svar tomt, så ingenting går ut på nettet.
-  await page.route("https://dummyjson.com/**", (route) =>
-    route.fulfill({ status: 204 }),
-  );
+  // Oppgavelista (TasksContext) får en tom liste, avatar-bildet et tomt svar.
+  // Da går ingenting ut på nettet.
+  await page.route("https://dummyjson.com/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+
+    if (path === "/todos") return route.fulfill({ json: { todos: [] } });
+    return route.fulfill({ status: 204 });
+  });
 
   let fetches = 0;
   page.on("console", (message) => {

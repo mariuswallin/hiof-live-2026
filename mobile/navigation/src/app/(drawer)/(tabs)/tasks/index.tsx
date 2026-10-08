@@ -1,6 +1,9 @@
 import { Link, Stack } from "expo-router";
 import { Pressable, StyleSheet, Text } from "react-native";
 
+import { Empty } from "@/components/shared/Empty";
+import { Loading } from "@/components/shared/Loading";
+import { Screen } from "@/components/shared/Screen";
 import { TaskList } from "@/components/tasks/TaskList";
 import { Theme } from "@/constants/theme";
 import { useTasks } from "@/contexts/TasksContext";
@@ -14,7 +17,8 @@ import { useTasks } from "@/contexts/TasksContext";
  * "ny oppgave" er flyttet til en modal som åpnes med + i headeren.
  */
 export default function TasksScreen() {
-  const { tasks, toggle } = useTasks();
+  // isLoading/error kommer fra hentingen i TasksContext (useEffect).
+  const { tasks, toggle, isLoading, error } = useTasks();
 
   return (
     <>
@@ -36,7 +40,18 @@ export default function TasksScreen() {
         }}
       />
 
-      <TaskList tasks={tasks} onToggle={toggle} />
+      {/* Tre tilstander: laster -> feil -> data. TaskList får bare data. */}
+      {isLoading ? (
+        <Screen>
+          <Loading label="Henter oppgaver ..." />
+        </Screen>
+      ) : error ? (
+        <Screen>
+          <Empty title="Klarte ikke å hente oppgaver" hint={error} />
+        </Screen>
+      ) : (
+        <TaskList tasks={tasks} onToggle={toggle} />
+      )}
     </>
   );
 }

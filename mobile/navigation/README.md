@@ -47,7 +47,8 @@ Stack                      (src/app/_layout.tsx)
 │   │   └── Profil         /profile
 │   ├── Innstillinger      /settings
 │   └── Om appen           /about
-└── Ny oppgave (modal)     /new-task
+├── Ny oppgave (modal)     /new-task
+└── Admin (beskyttet)      /admin      kun role: "admin"
 ```
 
 Tommelfingerregel: **det som ligger ytterst, dekker det som ligger under.**
@@ -62,8 +63,9 @@ ligger inne i Oppgaver-taben (tab-baren blir stående).
 
 | Fil | Hva den gjør | Nøkkelbegreper |
 | --- | --- | --- |
-| `_layout.tsx` | Rot-Stack. Pakker hele appen i providers (`GestureHandlerRootView`, `QueryClientProvider`, `AuthProvider`, `TasksProvider`). Registrerer `(drawer)` uten header og `new-task` som modal. | `Stack`, `presentation: "modal"`, providers over navigatoren |
+| `_layout.tsx` | Rot-Stack. Pakker hele appen i providers (`GestureHandlerRootView`, `QueryClientProvider`, `AuthProvider`, `TasksProvider`). `RootNavigator` viser «Henter bruker …» til rollen er kjent, og beskytter `admin` med `Stack.Protected`. Registrerer `(drawer)` uten header og `new-task` som modal. | `Stack`, `presentation: "modal"`, providers over navigatoren |
 | `new-task.tsx` | Modal som bruker `TaskRegister` (samme skjema som i hiof-live-2026). Validerer tittelen med zod, kaller `add()` og lukker med `router.back()`. | modal, `router.back()`, context |
+| `admin.tsx` | **Beskyttet** skjerm, kun for admin. Ligger i rot-Stacken, så den kan åpnes fra hvor som helst. Beskyttes av `<Stack.Protected guard={isAdmin}>` i `_layout.tsx` – skjermen sjekker ikke rollen selv. Knapp som bytter til vanlig bruker viser at man kastes ut. | `Stack.Protected`, `guard` |
 | `+not-found.tsx` | Fallback for ukjente URL-er, med lenke til `/`. | `+not-found` |
 | `(drawer)/_layout.tsx` | Skuffen. Tre valg: Oppgaver (`(tabs)`), Innstillinger, Om appen. Skjuler sin egen header for `(tabs)` for å unngå dobbel header. «Oppgaver» bruker `listeners` → `drawerItemPress` for å gå rett til `/tasks`. | `Drawer`, `drawerIcon`, `headerShown: false`, `listeners` |
 | `(drawer)/settings.tsx` | Skjerm som bare finnes i skuffen – derfor ingen tab-bar. Bruker skuffens header. | skjerm utenfor tabs |
@@ -90,17 +92,17 @@ er lette å kjenne igjen.
 | `shared/Loading.tsx` | Laster-tilstand (uendret fra demoen). |
 | `shared/Screen.tsx` | Enkel ramme (ScrollView + padding). Erstatter `TaskLayout` fra demoen – headeren tegnes nå av navigatoren. |
 | `shared/Card.tsx` | Hvit boks med overskrift, deler skjermene i seksjoner. |
+| `shared/Button.tsx` | Blå/rød knapp med full bredde (`label`, `onPress`, `danger`, `disabled`). |
 | `shared/Icon.tsx` | Wrapper rundt `SymbolView`: SF Symbols på iOS, Material Symbols på Android/web. |
 
 ### Øvrige mapper
 
 | Fil | Hva den gjør |
 | --- | --- |
-| `contexts/TasksContext.tsx` | Samme `TasksProvider` + `useTasks()` som i demoen (`toggle`, `add(task)`), pluss `remove`. Nå nødvendig: skjermene lages av ruteren og **kan ikke få props**. |
-| `contexts/AuthContext.tsx` | `AuthProvider` + `useAuth()`. Henter innlogget bruker **ved hver oppstart/refresh** og legger den i context. Kommentaren øverst forklarer hvor lenge brukeren «lever». |
-| `api/auth.ts` | `fetchCurrentUser()` – **simulert** `GET /me` (800 ms forsinkelse, fast bruker, validert med zod). Logger `[auth] Henter …` så man ser *når* den kjører. |
-| `api/dummy-json.ts` | `fetchTodo(id)` og `fetchUser(id)`. Sjekker `response.ok` (fetch kaster ikke ved 404) og validerer svaret med zod. Tar imot `signal` så forespørselen kan avbrytes. |
-| `data/tasks.ts` | Testdata med id 1–8 – samme id-er finnes i dummyjson, så hver oppgave har en «tvilling» i API-et. |
+| `contexts/TasksContext.tsx` | Samme `TasksProvider` + `useTasks()` som i demoen (`toggle`, `add(task)`), pluss `remove`. **Henter oppgavene fra `dummyjson.com/todos` med `useEffect`** (fetch → `response.ok` → JSON → zod → `Todo` til `Task`), med `isLoading`/`error`. Nå nødvendig: skjermene lages av ruteren og **kan ikke få props**. |
+| `contexts/AuthContext.tsx` | `AuthProvider` + `useAuth()`: `user`, `isLoading`, `isAdmin`, `reload`, `loginAs(role)`. Henter innlogget bruker **ved hver oppstart/refresh** og legger den i context. Kommentaren øverst forklarer hvor lenge brukeren «lever». |
+| `api/auth.ts` | `AuthUserSchema` (bruker + `role: "admin" \| "user"`). `fetchCurrentUser()` – **simulert** `GET /me` (800 ms, validert med zod). To kontoer: Ola (`user`, standard) og Kari (`admin`). `simulateLogin(role)` bytter konto. Logger `[auth] Henter …` så man ser *når* den kjører. |
+| `api/dummy-json.ts` | Zod-skjemaer (`TodoSchema`, `TodosResponseSchema`, `UserSchema`), `fetchTodo(id)` og `fetchUser(id)`. Sjekker `response.ok` (fetch kaster ikke ved 404) og validerer svaret med zod. Tar imot `signal` så forespørselen kan avbrytes. |
 | `constants/theme.ts` | Farger, avstander, radius, skriftstørrelser (samme som demoen). |
 | `utils/task-schema.ts` | Demoens `TaskSchema` (+ `trim()` og norske feilmeldinger) og `NewTaskSchema` (= alt unntatt `id`). |
 
@@ -143,9 +145,10 @@ Gå gjennom `RemoteTodo`: `useState` for data og feil (laster = ingen av delene 
 Trykk «Se hvem som eier den» → `user/[userId].tsx`. Sammenlign tabellen i kommentaren.
 Gå tilbake og inn igjen: data vises med en gang (cache).
 
-**Steg 8 – Modal + delt state**
+**Steg 8 – Modal + delt state + henting i context**
 `+` → `new-task.tsx`. Samme `TaskRegister` som før – bare lagt i en modal som lukkes etterpå. Legg til en oppgave → lista og badgen oppdateres. Forklar
-`contexts/TasksContext.tsx`. Åpne den nye oppgaven: API gir 404 → feil-tilstand.
+`contexts/TasksContext.tsx`: `useEffect` henter lista fra dummyjson ved oppstart – gå gjennom
+steg 1–5 i kommentarene. Åpne den nye oppgaven: API gir 404 → feil-tilstand.
 
 **Steg 9 – Navigere på tvers**
 Hjem-taben: `Link` til annen tab, rett til `/tasks/3` (tilbake virker takket være
@@ -156,6 +159,13 @@ Hjem-taben: `Link` til annen tab, rett til `/tasks/3` (tilbake virker takket væ
 `[auth] Henter innlogget bruker` i konsollen – én gang. Bytt tab, åpne detalj og modal:
 ingen ny henting. Refresh (F5 / «r» i Metro): borte fra minnet → hentes på nytt.
 «Hent bruker på nytt» på Profil simulerer det samme.
+
+**Steg 11 – Rolle og beskyttet rute**
+`_layout.tsx`: `<Stack.Protected guard={isAdmin}>` rundt `admin`. Som Ola (`user`): ingen
+lenke på Hjem, og `/admin` i adressefeltet → sendes til `/`. Profil → «Logg inn som admin»
+→ lenken dukker opp → åpne `/admin` → «Bytt til vanlig bruker» → kastes ut. Poeng: å skjule
+lenken er ikke beskyttelse, og `Stack.Protected` beskytter bare skjermen – API-et må selv
+sjekke rollen.
 
 ---
 
@@ -168,7 +178,8 @@ ingen ny henting. Refresh (F5 / «r» i Metro): borte fra minnet → hentes på 
 | `TaskList` med `TaskRegister` inni, `.map` | `TaskList` med `FlatList`, `TaskRegister` i egen modal |
 | `TaskItem`: hele raden toggler | `TaskItem`: raden er en `Link`, boksen toggler |
 | `TaskLayout` tegner header | Navigatoren tegner header og tab-bar |
-| Data fra lokal konstant | Også data fra API (`useEffect`, `useQuery`) og innlogget bruker (`AuthContext`) |
+| `useState(TASKS)` – data fra lokal konstant | `useState([])` + `useEffect` – lista hentes fra API i `TasksContext`. Også `useQuery` og innlogget bruker med rolle (`AuthContext`) |
+| Ingen tilgangsstyring | `/admin` beskyttet med `Stack.Protected` |
 
 ---
 
@@ -297,7 +308,9 @@ Alle som bruker `useTasks()` rendres på nytt når lista endres. For en liten ap
 helt greit. Med mye state kan man dele opp contexter eller bruke Zustand/Jotai.
 
 **Forsvinner oppgavene når jeg lukker appen?**
-Ja, alt ligger i minnet. Neste steg er AsyncStorage/SQLite lokalt, eller et API.
+Endringene, ja. Lista hentes fra API-et ved hver oppstart, men `toggle`/`add`/`remove`
+endrer bare state i minnet – API-et vet ingenting. Skal endringer overleve, må de sendes
+til API-et (POST/PATCH/DELETE) eller lagres lokalt (AsyncStorage/SQLite).
 
 ### Henting av data
 
@@ -379,6 +392,7 @@ bevegelsene.
 | Komponent | `src/components/tasks/TaskRegister.test.tsx` | Vitest + vitest-native + Testing Library | `pnpm test` |
 | E2E | `e2e/navigation.spec.ts` | Playwright (web) | `pnpm e2e` |
 | E2E | `e2e/auth.spec.ts` – brukeren hentes ved oppstart og refresh, ikke ved navigasjon | Playwright (web) | `pnpm e2e` |
+| E2E | `e2e/admin.spec.ts` – vanlig bruker sendes bort fra `/admin`, admin kommer inn og kastes ut ved rollebytte | Playwright (web) | `pnpm e2e` |
 
 `pnpm test:watch` kjører Vitest på nytt ved lagring, `pnpm e2e:ui` viser hvert steg i
 Playwrights UI. Første gang e2e: `npx playwright install chromium`.

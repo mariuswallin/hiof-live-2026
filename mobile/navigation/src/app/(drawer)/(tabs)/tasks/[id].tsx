@@ -1,9 +1,10 @@
 import { Image } from "expo-image";
 import { Link, Stack, router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { StyleSheet, Text } from "react-native";
 
 import { fetchTodo, type Todo } from "@/api/dummy-json";
+import { Button } from "@/components/shared/Button";
 import { Card } from "@/components/shared/Card";
 import { Empty } from "@/components/shared/Empty";
 import { Loading } from "@/components/shared/Loading";
@@ -23,7 +24,18 @@ import { useTasks } from "@/contexts/TasksContext";
  */
 export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { tasks, toggle, remove } = useTasks();
+  const { tasks, toggle, remove, isLoading } = useTasks();
+
+  // Åpnes /tasks/3 direkte (dyplenke eller refresh), er lista kanskje ikke
+  // hentet ennå. Uten denne sjekken ville vi vist "Fant ikke oppgaven" et
+  // øyeblikk, før TasksContext har fått svar fra API-et.
+  if (isLoading) {
+    return (
+      <Screen>
+        <Loading label="Henter oppgaver ..." />
+      </Screen>
+    );
+  }
 
   // Vi får bare id-en via navigasjonen - selve oppgaven slår vi opp selv.
   // Da er detaljsiden alltid oppdatert, og URL-en er alt som trengs for å
@@ -78,7 +90,11 @@ export default function TaskDetailScreen() {
 }
 
 /**
- * Henter "tvillingen" fra dummyjson.com/todos/:id med useEffect.
+ * Henter DENNE ene oppgaven direkte fra dummyjson.com/todos/:id med useEffect.
+ *
+ * Lista i TasksContext ble hentet fra samme API ved oppstart. Her ser vi
+ * API-ets versjon: toggle du oppgaven over, endres "Lokalt", men ikke denne -
+ * API-et vet ingenting om lokale endringer.
  *
  * Dette er den "manuelle" måten. Vi må selv holde styr på TRE tilstander:
  * data, laster, feil. (Sammenlign med useQuery i user/[userId].tsx.)
@@ -162,28 +178,6 @@ function RemoteTodo({ id }: { id: string }) {
   );
 }
 
-type ButtonProps = {
-  label: string;
-  onPress: () => void;
-  danger?: boolean;
-};
-
-function Button({ label, onPress, danger }: ButtonProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [
-        styles.button,
-        danger && styles.buttonDanger,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Text style={styles.buttonText}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   text: {
     fontSize: Theme.fontSize.md,
@@ -204,22 +198,5 @@ const styles = StyleSheet.create({
     fontSize: Theme.fontSize.md,
     fontWeight: "600",
     color: Theme.primary,
-  },
-  button: {
-    alignItems: "center",
-    paddingVertical: Theme.spacing.sm,
-    borderRadius: Theme.radius.sm,
-    backgroundColor: Theme.primary,
-  },
-  buttonDanger: {
-    backgroundColor: Theme.danger,
-  },
-  pressed: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: Theme.textInverted,
-    fontSize: Theme.fontSize.md,
-    fontWeight: "700",
   },
 });

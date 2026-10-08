@@ -1,9 +1,9 @@
 import { Image } from "expo-image";
 import { Link } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
+import { Button } from "@/components/shared/Button";
 import { Card } from "@/components/shared/Card";
-import { Loading } from "@/components/shared/Loading";
 import { Screen } from "@/components/shared/Screen";
 import { Theme } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
@@ -16,17 +16,11 @@ import { useAuth } from "@/contexts/AuthContext";
  * Bytt tab og kom tilbake: brukeren er der med en gang, uten ny henting.
  */
 export default function ProfileScreen() {
-  const { user, reload } = useAuth();
+  const { user, isAdmin, reload, loginAs } = useAuth();
 
-  // Rett etter oppstart/refresh er user null til API-svaret kommer.
-  // Hver skjerm som bruker useAuth() må tåle det.
-  if (!user) {
-    return (
-      <Screen>
-        <Loading label="Henter bruker ..." />
-      </Screen>
-    );
-  }
+  // Rot-_layout.tsx viser ikke appen før brukeren er hentet, så her finnes
+  // den alltid. Men typen er AuthUser | null, så TypeScript krever sjekken.
+  if (!user) return null;
 
   return (
     <Screen>
@@ -35,7 +29,8 @@ export default function ProfileScreen() {
           <Image source={user.image} style={styles.avatar} />
           <View style={styles.info}>
             <Text style={styles.muted}>{user.email}</Text>
-            <Text style={styles.muted}>Student, HiOF</Text>
+            {/* Rollen kom fra API-et sammen med resten av brukeren. */}
+            <Text style={styles.muted}>Rolle: {user.role}</Text>
           </View>
         </View>
 
@@ -43,13 +38,18 @@ export default function ProfileScreen() {
           Simulerer en refresh: user settes til null og hentes på nytt.
           Sammenlign med en ekte refresh (F5 / "r" i Metro) - samme flyt.
         */}
-        <Pressable
-          onPress={reload}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-        >
-          <Text style={styles.buttonText}>Hent bruker på nytt</Text>
-        </Pressable>
+        <Button label="Hent bruker på nytt" onPress={reload} />
+      </Card>
+
+      <Card title="Bytt konto (simulert innlogging)">
+        <Text style={styles.muted}>
+          Som admin dukker det opp en lenke til /admin på Hjem. Som vanlig
+          bruker finnes ikke ruten i det hele tatt.
+        </Text>
+        <Button
+          label={isAdmin ? "Logg inn som vanlig bruker" : "Logg inn som admin"}
+          onPress={() => loginAs(isAdmin ? "user" : "admin")}
+        />
       </Card>
 
       <Card title="Snarveier">
@@ -85,19 +85,5 @@ const styles = StyleSheet.create({
     fontSize: Theme.fontSize.md,
     fontWeight: "600",
     color: Theme.primary,
-  },
-  button: {
-    alignItems: "center",
-    paddingVertical: Theme.spacing.sm,
-    borderRadius: Theme.radius.sm,
-    backgroundColor: Theme.primary,
-  },
-  pressed: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: Theme.textInverted,
-    fontSize: Theme.fontSize.md,
-    fontWeight: "700",
   },
 });

@@ -14,23 +14,36 @@ import { useTasks } from "@/contexts/TasksContext";
  * Skjermen viser de ulike måtene å navigere på.
  */
 export default function HomeScreen() {
-  const { tasks } = useTasks();
+  const { tasks, isLoading } = useTasks();
   const doneCount = tasks.filter((task) => task.done).length;
   // Samme bruker som på Profil - begge leser fra AuthContext, ingen henter selv.
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
 
   return (
     <Screen>
-      {/* user er null rett etter oppstart, til AuthProvider har fått svar. */}
+      {/* Rot-_layout.tsx venter på brukeren, men typen tillater null. */}
       <Card title={user ? `Hei, ${user.firstName}!` : "Hei!"}>
         <Text style={styles.muted}>
-          {user ? user.email : "Henter bruker ..."}
+          {user?.email} · {user?.role}
         </Text>
       </Card>
 
+      {/*
+        Bare admin ser denne lenken. Men å skjule LENKEN er ikke nok -
+        hvem som helst kan skrive /admin i adressefeltet eller åpne en
+        dyplenke. Selve ruten beskyttes med Stack.Protected i _layout.tsx.
+      */}
+      {isAdmin ? (
+        <Card title="Admin">
+          <Link href="/admin" style={styles.link}>
+            Åpne admin-panelet →
+          </Link>
+        </Card>
+      ) : null}
+
       <Card title="Status">
         <Text style={styles.big}>
-          {doneCount} av {tasks.length}
+          {isLoading ? "…" : `${doneCount} av ${tasks.length}`}
         </Text>
         <Text style={styles.muted}>oppgaver fullført</Text>
       </Card>
