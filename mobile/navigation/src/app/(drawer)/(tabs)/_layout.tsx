@@ -1,9 +1,9 @@
 import { Tabs } from "expo-router/js-tabs";
 import { DrawerToggleButton } from "expo-router/drawer";
 
-import { Icon } from "@/components/icon";
+import { Icon } from "@/components/shared/Icon";
 import { Theme } from "@/constants/theme";
-import { useTasks } from "@/context/tasks-context";
+import { useTasks } from "@/contexts/TasksContext";
 
 /**
  * TAB-BAREN nederst på skjermen.

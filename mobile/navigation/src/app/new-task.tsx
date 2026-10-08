@@ -2,9 +2,9 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { TaskRegister } from "@/components/task-register";
+import { TaskRegister } from "@/components/tasks/TaskRegister";
 import { Theme } from "@/constants/theme";
-import { useTasks } from "@/context/tasks-context";
+import { useTasks } from "@/contexts/TasksContext";
 import { NewTaskSchema } from "@/utils/task-schema";
 
 /**
@@ -32,7 +32,8 @@ export default function NewTaskModal() {
       return;
     }
 
-    add(result.data.title);
+    // result.data = { title, done: false } - samme form som add() i demoen.
+    add(result.data);
     // Lukk modalen. Lista under er allerede oppdatert via context.
     router.back();
   }

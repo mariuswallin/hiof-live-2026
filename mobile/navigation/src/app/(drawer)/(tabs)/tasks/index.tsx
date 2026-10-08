@@ -1,16 +1,17 @@
 import { Link, Stack } from "expo-router";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text } from "react-native";
 
-import { Empty } from "@/components/empty";
-import { TaskItem } from "@/components/task-item";
+import { TaskList } from "@/components/tasks/TaskList";
 import { Theme } from "@/constants/theme";
-import { useTasks } from "@/context/tasks-context";
+import { useTasks } from "@/contexts/TasksContext";
 
 /**
- * "/tasks" - lista. Samme FlatList som i demo-appen.
+ * "/tasks" - lista. Samme oppsett som index.tsx i demo-appen:
+ *   const { tasks, toggle } = useTasks();
+ *   <TaskList tasks={tasks} onToggle={toggle} />
  *
- * Nytt her: ingen props! Skjermen henter data fra context, og hver rad er
- * en <Link> til detaljsiden (se components/task-item.tsx).
+ * Nytt her: hver rad er en <Link> til detaljsiden (se TaskItem.tsx), og
+ * "ny oppgave" er flyttet til en modal som åpnes med + i headeren.
  */
 export default function TasksScreen() {
   const { tasks, toggle } = useTasks();
@@ -35,28 +36,12 @@ export default function TasksScreen() {
         }}
       />
 
-      <FlatList
-        data={tasks}
-        keyExtractor={(task) => task.id}
-        renderItem={({ item }) => <TaskItem task={item} onToggle={toggle} />}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListEmptyComponent={
-          <Empty title="Ingen oppgaver" hint="Trykk + for å legge til." />
-        }
-        contentContainerStyle={styles.content}
-        contentInsetAdjustmentBehavior="automatic"
-      />
+      <TaskList tasks={tasks} onToggle={toggle} />
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
-    padding: Theme.spacing.lg,
-  },
-  separator: {
-    height: Theme.spacing.sm,
-  },
   headerButton: {
     fontSize: Theme.fontSize.xl,
     color: Theme.primary,

@@ -1,47 +1,49 @@
 import { createContext, use, useState, type ReactNode } from "react";
 
-import { TASKS } from "@/constants/tasks";
+import { TASKS } from "@/data/tasks";
 import type { Task } from "@/utils/task-schema";
 
 /**
- * Hvorfor Context her?
+ * Samme TasksContext som i demo-appen: TasksProvider i rot-_layout.tsx og
+ * useTasks() der dataene trengs. Nytt her er bare remove().
  *
- * I demo-appen bodde `tasks` i useState i index.tsx, og ble sendt ned som
- * props. Med navigasjon går ikke det: lista, detaljsiden og "ny oppgave"-
+ * I demoen var Context "kjekt å ha" - alt lå på én skjerm, så props hadde
+ * holdt. Med navigasjon er den NØDVENDIG: lista, detaljsiden og "ny oppgave"-
  * modalen er SØSKEN-skjermer som ruteren lager - vi rendrer dem aldri selv,
  * og kan derfor ikke gi dem props.
- *
- * Løsning: løft state OVER navigatoren (i rot-_layout.tsx) og la hver skjerm
- * hente det den trenger med useTasks().
  */
-type TasksContextValue = {
+type TaskContextData = {
   tasks: Task[];
   toggle: (id: string) => void;
-  add: (title: string) => void;
+  add: (task: Omit<Task, "id">) => void;
   remove: (id: string) => void;
 };
 
-const TasksContext = createContext<TasksContextValue | null>(null);
+const TasksContext = createContext<TaskContextData | null>(null);
 
 export function TasksProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>(TASKS);
 
   // Samme regler som i demoen: alltid ny array + nye objekter.
-  const toggle = (id: string) =>
-    setTasks((current) =>
-      current.map((task) =>
+  function toggle(id: string) {
+    setTasks((prev) =>
+      prev.map((task) =>
         task.id === id ? { ...task, done: !task.done } : task,
       ),
     );
+  }
 
-  const add = (title: string) =>
-    setTasks((current) => [
-      ...current,
-      { id: String(Date.now()), title, done: false },
-    ]);
+  function add(task: Omit<Task, "id">) {
+    // Date.now() i stedet for tasks.length + 1: når vi kan slette, kan
+    // lengden gå ned igjen, og da får to oppgaver samme id.
+    const newTask = { id: String(Date.now()), ...task };
 
-  const remove = (id: string) =>
-    setTasks((current) => current.filter((task) => task.id !== id));
+    setTasks((prev) => [...prev, newTask]);
+  }
+
+  function remove(id: string) {
+    setTasks((prev) => prev.filter((task) => task.id !== id));
+  }
 
   return (
     <TasksContext value={{ tasks, toggle, add, remove }}>

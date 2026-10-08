@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { StyleSheet, Switch, Text, View } from "react-native";
 
-import { Card } from "@/components/card";
-import { Screen } from "@/components/screen";
+import { Card } from "@/components/shared/Card";
+import { Screen } from "@/components/shared/Screen";
 import { Theme } from "@/constants/theme";
 
 /**

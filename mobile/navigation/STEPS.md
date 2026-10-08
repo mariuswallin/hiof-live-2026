@@ -102,7 +102,7 @@ Parentes = gruppe, kun for organisering – ikke med i URL-en. `tasks/` uten par
 `/tasks`. Derfor er `(drawer)/(tabs)/index.tsx` bare `/`.
 
 **Hvorfor kan jeg ikke legge komponenter i `app/`?**
-Alt i `app/` blir en rute. En `task-item.tsx` der ville blitt en skjerm på `/task-item`.
+Alt i `app/` blir en rute. En `TaskItem.tsx` der ville blitt en skjerm på `/TaskItem`.
 Derfor ligger gjenbrukbare komponenter i `src/components/`.
 
 **Må jeg liste opp alle skjermene i `_layout.tsx`?**
@@ -221,7 +221,9 @@ enklere å style – bra for læring.
 1. `tasks/_layout.tsx` er en `Stack`: liste → detalj → eier.
 2. ☰ bare på `index` – de andre får tilbake-knapp automatisk.
 3. `unstable_settings = { initialRouteName: "index" }` – kommer tilbake i steg 9.
-4. `tasks/index.tsx`: **ingen props**, data fra `useTasks()`.
+4. `tasks/index.tsx`: **ingen props**, data fra `useTasks()` – samme linjer som demoens
+   `index.tsx`: `<TaskList tasks={tasks} onToggle={toggle} />`. `TaskList` bruker nå
+   `FlatList` (fyller skjermen, må scrolle), og `TaskRegister` er flyttet til modalen.
 5. Skjermen styrer sin egen header med `<Stack.Screen options>`:
 
 ```tsx
@@ -256,7 +258,7 @@ Stacken viser tilbake-knapp når det finnes noe å gå tilbake til. ☰ er bare 
 
 **Mål:** Navigere med `<Link>` og sende med en parameter.
 
-**Filer:** `src/components/task-item.tsx`
+**Filer:** `src/components/tasks/TaskItem.tsx`
 
 **Vis**
 
@@ -292,7 +294,7 @@ en timer osv.
 - URL-en skal være nok til å åpne skjermen (dyplenke, web-refresh, deling).
 - Detaljsiden slår opp i context, og viser derfor alltid oppdaterte data.
 
-**Hvorfor to `Pressable` i `task-item.tsx`?**
+**Hvorfor to `Pressable` i `TaskItem.tsx`?**
 Raden har to handlinger: trykk på raden → **naviger** til detalj, trykk på boksen →
 **toggle** (bli på lista). Når to Pressable er nøstet, får den innerste trykket – så et
 trykk på boksen navigerer ikke. Vil man ha det enklere: fjern den indre og la
@@ -442,8 +444,8 @@ bakgrunnen om det er nytt.
 
 **Mål:** En skjerm som legger seg over alt, og state som deles mellom skjermer.
 
-**Filer:** `src/app/new-task.tsx`, `src/app/_layout.tsx`, `src/context/tasks-context.tsx`,
-`src/components/task-register.tsx`
+**Filer:** `src/app/new-task.tsx`, `src/app/_layout.tsx`, `src/contexts/TasksContext.tsx`,
+`src/components/tasks/TaskRegister.tsx`
 
 **Vis**
 
@@ -452,7 +454,7 @@ bakgrunnen om det er nytt.
 2. Samme `TaskRegister` som i demoen – nytt er bare `error`-prop og hva vi gjør etterpå.
 3. `handleRegisterTask`: zod (`NewTaskSchema.safeParse`) → `add()` → `router.back()`.
 4. «Avbryt»-knapp for Android.
-5. `tasks-context.tsx`: `TasksProvider` + `useTasks()`, state løftet over navigatoren.
+5. `TasksContext.tsx`: `TasksProvider` + `useTasks()`, state løftet over navigatoren.
    `toggle`/`add`/`remove` lager alltid ny array.
 
 **Prøv**
@@ -473,9 +475,11 @@ Detaljsiden ligger *inne i* tabs (i Oppgaver-stacken). Modalen ligger i rot-Stac
 Ikke via navigasjonen. Oppdater delt state (her `add()` i context) og lukk modalen –
 skjermen under leser samme state og oppdateres selv.
 
-**Hvorfor Context og ikke bare props som i demoen?**
-Skjermene rendres av ruteren – vi skriver aldri `<TaskDetail task={...} />`, og kan
-derfor ikke gi dem props. Delt state må ligge *over* navigatoren.
+**Vi hadde jo `TasksContext` i demoen også – hva er nytt?**
+Ingenting i selve contexten (bare `remove`). I demoen lå alt på én skjerm, så props
+hadde holdt. Nå rendres skjermene av ruteren – vi skriver aldri
+`<TaskDetail task={...} />`, og kan derfor ikke gi dem props. Delt state *må* ligge
+over navigatoren.
 
 **Blir ikke Context tregt?**
 Alle som bruker `useTasks()` rendres på nytt når lista endres. For en liten app er det
@@ -573,12 +577,59 @@ development build (`npx expo run:ios`). Bytt `tasks/3` med `finnes-ikke` for å 
 
 ---
 
+## Steg 11 – Innlogget bruker i context (`AuthProvider`)
+
+**Mål:** Forstå hvor lenge data i context «lever» – og hvorfor brukeren må hentes på
+nytt ved hver oppstart.
+
+**Filer:** `src/contexts/AuthContext.tsx`, `src/api/auth.ts`, `src/app/_layout.tsx`,
+`(tabs)/profile.tsx`, `(tabs)/index.tsx`
+
+**Vis**
+
+1. `api/auth.ts`: `fetchCurrentUser()` later som den er `GET /me` – venter 800 ms og
+   returnerer en fast bruker (validert med zod). Logger `[auth] Henter innlogget bruker`.
+2. `AuthContext.tsx`: samme mønster som `TasksContext` – men `useState(null)` +
+   `useEffect(..., [])` som henter brukeren. Gå gjennom livsløpet i kommentaren øverst:
+   oppstart → `null` → hent → `setUser` → navigering (ingen ny henting) → refresh → start
+   på nytt.
+3. `_layout.tsx`: `AuthProvider` ligger over navigatoren (og over `TasksProvider`), så
+   den mountes én gang og aldri på nytt ved navigering.
+4. `profile.tsx` og `index.tsx`: begge leser `useAuth()`, ingen henter selv. Begge må tåle
+   at `user` er `null` rett etter oppstart.
+
+**Prøv**
+
+- Start appen med konsollen åpen: `[auth] Henter …` kommer **én** gang.
+- Bytt tab, åpne en oppgave, åpne modalen: ingen ny logglinje.
+- Refresh (F5 på web, «r» i Metro): brukeren er borte et øyeblikk, ny logglinje.
+- «Hent bruker på nytt» på Profil: samme flyt, uten å refreshe hele appen.
+
+**Spørsmål**
+
+**Hvorfor ikke lagre brukeren i AsyncStorage så vi slipper å hente?**
+Det man lagrer er en *token* (f.eks. `expo-secure-store`), ikke brukeren. Brukerdata kan
+ha endret seg på serveren (navn, rolle, sperret konto). API-et er sannheten – context er
+bare en kopi mens appen kjører.
+
+**Hvorfor `null` og ikke en tom bruker `{}`?**
+`null` sier tydelig «vet ikke ennå». Da tvinger TypeScript skjermene til å håndtere
+laster-tilstanden (`if (!user)`), i stedet for å vise tomme felter.
+
+**Hva med utlogging og innloggingsskjerm?**
+Utlogging = slett token + `setUser(null)`. En innloggingsskjerm legges typisk i en egen
+gruppe, f.eks. `(auth)/login.tsx`, og man sender brukeren dit med `router.replace` når
+`/me` svarer 401. Ikke med her – fokus er at brukeren hentes og deles via context.
+
+---
+
 ## Oppsummering – forskjeller fra `mobile/demo`
 
 | Demo                                        | Navigasjon                                            |
 | ------------------------------------------- | ----------------------------------------------------- |
 | Én skjerm (`index.tsx`)                     | Mange skjermer i et rutetre                           |
-| `tasks` i `useState` + props                | `tasks` i Context (`useTasks()`)                      |
-| `TaskLayout` + `SafeAreaView` tegner header | Navigatoren tegner header og tab-bar                  |
+| `TasksContext` valgfritt (alt på én skjerm) | `TasksContext` nødvendig (skjermer får ikke props)     |
+| `TaskList` med `TaskRegister` inni, `.map`  | `TaskList` med `FlatList`, `TaskRegister` i modal      |
+| `TaskLayout` tegner header                  | Navigatoren tegner header og tab-bar                  |
 | Data fra lokal konstant                     | Også data fra eksternt API (`useEffect` og `useQuery`) |
-| Fem liste- og tre skjemavarianter           | Én av hver – fokus på navigasjon                      |
+| Ingen bruker                                | Innlogget bruker i `AuthContext`, hentet ved oppstart  |

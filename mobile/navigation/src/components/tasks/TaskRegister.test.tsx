@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { describe, expect, test, vi } from "vitest";
 
-import { TaskRegister } from "@/components/task-register";
+import { TaskRegister } from "@/components/tasks/TaskRegister";
 
 /**
  * KOMPONENT-TEST: render komponenten, gjør det brukeren gjør, sjekk resultatet.

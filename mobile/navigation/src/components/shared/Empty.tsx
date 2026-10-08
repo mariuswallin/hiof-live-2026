@@ -10,6 +10,11 @@ type EmptyProps = {
   onPress?: () => void;
 };
 
+/**
+ * Empty fra demo-appen (title, hint, onPress). I demoen var onPress påkrevd
+ * og sendte data opp til forelderen, for å vise callbacks. Her er den
+ * valgfri: uten onPress vises ingen knapp, og actionLabel styrer teksten.
+ */
 export function Empty({ title, hint, actionLabel, onPress }: EmptyProps) {
   return (
     <View style={styles.container}>

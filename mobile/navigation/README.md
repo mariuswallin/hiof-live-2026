@@ -62,41 +62,47 @@ ligger inne i Oppgaver-taben (tab-baren blir stående).
 
 | Fil | Hva den gjør | Nøkkelbegreper |
 | --- | --- | --- |
-| `_layout.tsx` | Rot-Stack. Pakker hele appen i providers (`GestureHandlerRootView`, `QueryClientProvider`, `TasksProvider`). Registrerer `(drawer)` uten header og `new-task` som modal. | `Stack`, `presentation: "modal"`, providers over navigatoren |
+| `_layout.tsx` | Rot-Stack. Pakker hele appen i providers (`GestureHandlerRootView`, `QueryClientProvider`, `AuthProvider`, `TasksProvider`). Registrerer `(drawer)` uten header og `new-task` som modal. | `Stack`, `presentation: "modal"`, providers over navigatoren |
 | `new-task.tsx` | Modal som bruker `TaskRegister` (samme skjema som i hiof-live-2026). Validerer tittelen med zod, kaller `add()` og lukker med `router.back()`. | modal, `router.back()`, context |
 | `+not-found.tsx` | Fallback for ukjente URL-er, med lenke til `/`. | `+not-found` |
 | `(drawer)/_layout.tsx` | Skuffen. Tre valg: Oppgaver (`(tabs)`), Innstillinger, Om appen. Skjuler sin egen header for `(tabs)` for å unngå dobbel header. «Oppgaver» bruker `listeners` → `drawerItemPress` for å gå rett til `/tasks`. | `Drawer`, `drawerIcon`, `headerShown: false`, `listeners` |
 | `(drawer)/settings.tsx` | Skjerm som bare finnes i skuffen – derfor ingen tab-bar. Bruker skuffens header. | skjerm utenfor tabs |
 | `(drawer)/about.tsx` | Enda en skuff-skjerm. | |
 | `(drawer)/(tabs)/_layout.tsx` | Tab-baren: Hjem, Oppgaver, Profil. Ikoner, badge med antall åpne oppgaver, ☰-knapp i headeren. | `Tabs`, `tabBarIcon`, `tabBarBadge`, `DrawerToggleButton` |
-| `(drawer)/(tabs)/index.tsx` | Hjem (`/`). Viser status og **alle måtene å navigere på**: `Link` til annen tab, rett inn på `/tasks/3`, lenke til skuff-skjerm, `router.push` til modal. | `Link`, `router.push/replace/back` |
-| `(drawer)/(tabs)/profile.tsx` | Enkel tab uten egen Stack. Lenke til `/settings`. | tab uten stack |
+| `(drawer)/(tabs)/index.tsx` | Hjem (`/`). Hilser på innlogget bruker (`useAuth()`), viser status og **alle måtene å navigere på**: `Link` til annen tab, rett inn på `/tasks/3`, lenke til skuff-skjerm, `router.push` til modal. | `Link`, `router.push/replace/back` |
+| `(drawer)/(tabs)/profile.tsx` | Enkel tab uten egen Stack. Viser innlogget bruker fra `useAuth()` (laster-tilstand til den er hentet), knapp som henter brukeren på nytt, lenke til `/settings`. | tab uten stack, `useAuth()` |
 | `(drawer)/(tabs)/tasks/_layout.tsx` | Stack **inne i** Oppgaver-taben. ☰ på lista, tilbake-knapp på resten. `initialRouteName: "index"` sørger for at lista alltid ligger under detaljsiden. | Stack i tab, `unstable_settings` |
-| `(drawer)/(tabs)/tasks/index.tsx` | Lista (`FlatList`). Legger til `+` i headeren med `<Stack.Screen options>` fra selve skjermen. | skjerm styrer egen header |
+| `(drawer)/(tabs)/tasks/index.tsx` | Lista: `<TaskList tasks={tasks} onToggle={toggle} />`, som i demoens `index.tsx`. Legger til `+` i headeren med `<Stack.Screen options>` fra selve skjermen. | skjerm styrer egen header |
 | `(drawer)/(tabs)/tasks/[id].tsx` | **Detaljsiden.** Leser `id` fra URL-en, slår opp oppgaven i context, dynamisk tittel, fullfør/slett. `RemoteTodo` henter `dummyjson.com/todos/:id` med **`useEffect`**, viser et bilde bygget fra svaret, og sender `userId` videre med en `Link`. | `useLocalSearchParams`, `useEffect`, `AbortController`, `key`, `Image` |
 | `(drawer)/(tabs)/tasks/user/[userId].tsx` | Tredje nivå i stacken. Henter `dummyjson.com/users/:userId` med **TanStack Query**. Kommentaren øverst sammenligner med `useEffect`. | `useQuery`, `queryKey`, cache |
 
 ### `src/components/` – gjenbrukbare byggeklosser
 
+Samme mapper og filnavn som i `mobile/demo` (`tasks/` og `shared/`), så komponentene
+er lette å kjenne igjen.
+
 | Fil | Hva den gjør |
 | --- | --- |
-| `task-item.tsx` | Samme rad som i hiof-live-2026 (checkbox + tittel), pluss `>` til høyre. Hele raden er en `<Link asChild>` til detaljsiden, avkrysningsboksen er en egen `Pressable` som bare toggler. |
-| `task-register.tsx` | `TaskRegister` fra hiof-live-2026 («Du skrev …», «Register Task», `onRegister`). Nytt: valgfri `error`-prop. |
-| `screen.tsx` | Enkel ramme (ScrollView + padding). Erstatter `TaskLayout`/`SafeAreaView` fra demoen – headeren tegnes nå av navigatoren. |
-| `card.tsx` | Hvit boks med overskrift, deler skjermene i seksjoner. |
-| `icon.tsx` | Wrapper rundt `SymbolView`: SF Symbols på iOS, Material Symbols på Android/web. |
-| `empty.tsx` | Tom-/feiltilstand (kopiert fra demoen). |
-| `loading.tsx` | Laster-tilstand (kopiert fra demoen). |
+| `tasks/TaskItem.tsx` | Samme rad og props (`task`, `onToggle`) som i demoen, pluss `>` til høyre. Hele raden er en `<Link asChild>` til detaljsiden, avkrysningsboksen er en egen `Pressable` som bare toggler. |
+| `tasks/TaskList.tsx` | Samme navn og props som i demoen (minus `onRegister`). `FlatList` i stedet for `.map`, og `TaskRegister` er flyttet ut til modalen. |
+| `tasks/TaskRegister.tsx` | `TaskRegister` fra demoen («Du skrev …», «Register Task», `onRegister`). Nytt: valgfri `error`-prop. |
+| `shared/Empty.tsx` | Tom-/feiltilstand fra demoen. `onPress` er valgfri her (+ `actionLabel`). |
+| `shared/Loading.tsx` | Laster-tilstand (uendret fra demoen). |
+| `shared/Screen.tsx` | Enkel ramme (ScrollView + padding). Erstatter `TaskLayout` fra demoen – headeren tegnes nå av navigatoren. |
+| `shared/Card.tsx` | Hvit boks med overskrift, deler skjermene i seksjoner. |
+| `shared/Icon.tsx` | Wrapper rundt `SymbolView`: SF Symbols på iOS, Material Symbols på Android/web. |
 
 ### Øvrige mapper
 
 | Fil | Hva den gjør |
 | --- | --- |
-| `context/tasks-context.tsx` | `TasksProvider` + `useTasks()`. Holder oppgavelista og `toggle`/`add`/`remove`. Trengs fordi skjermene lages av ruteren og **ikke kan få props** – state løftes derfor over navigatoren. |
+| `contexts/TasksContext.tsx` | Samme `TasksProvider` + `useTasks()` som i demoen (`toggle`, `add(task)`), pluss `remove`. Nå nødvendig: skjermene lages av ruteren og **kan ikke få props**. |
+| `contexts/AuthContext.tsx` | `AuthProvider` + `useAuth()`. Henter innlogget bruker **ved hver oppstart/refresh** og legger den i context. Kommentaren øverst forklarer hvor lenge brukeren «lever». |
+| `api/auth.ts` | `fetchCurrentUser()` – **simulert** `GET /me` (800 ms forsinkelse, fast bruker, validert med zod). Logger `[auth] Henter …` så man ser *når* den kjører. |
 | `api/dummy-json.ts` | `fetchTodo(id)` og `fetchUser(id)`. Sjekker `response.ok` (fetch kaster ikke ved 404) og validerer svaret med zod. Tar imot `signal` så forespørselen kan avbrytes. |
-| `constants/tasks.ts` | Testdata med id 1–8 – samme id-er finnes i dummyjson, så hver oppgave har en «tvilling» i API-et. |
+| `data/tasks.ts` | Testdata med id 1–8 – samme id-er finnes i dummyjson, så hver oppgave har en «tvilling» i API-et. |
 | `constants/theme.ts` | Farger, avstander, radius, skriftstørrelser (samme som demoen). |
-| `utils/task-schema.ts` | Zod-skjema for `Task` og `NewTask` (forenklet utgave av demoens). |
+| `utils/task-schema.ts` | Demoens `TaskSchema` (+ `trim()` og norske feilmeldinger) og `NewTaskSchema` (= alt unntatt `id`). |
 
 ### Konfig
 
@@ -126,7 +132,7 @@ skuffen skjuler sin, tabs viser sin med ☰ – ellers får vi to headere.
 Stacken har egen header. Vis `+` i headeren (skjermen styrer egen header).
 
 **Steg 5 – Lenke til detaljside**
-`components/task-item.tsx`: `href={{ pathname: "/tasks/[id]", params: { id } }}` og
+`components/tasks/TaskItem.tsx`: `href={{ pathname: "/tasks/[id]", params: { id } }}` og
 `asChild`. Trykk på raden → detalj. Trykk på boksen → bare toggle.
 
 **Steg 6 – Detaljside + `useEffect`**
@@ -139,11 +145,17 @@ Gå tilbake og inn igjen: data vises med en gang (cache).
 
 **Steg 8 – Modal + delt state**
 `+` → `new-task.tsx`. Samme `TaskRegister` som før – bare lagt i en modal som lukkes etterpå. Legg til en oppgave → lista og badgen oppdateres. Forklar
-`context/tasks-context.tsx`. Åpne den nye oppgaven: API gir 404 → feil-tilstand.
+`contexts/TasksContext.tsx`. Åpne den nye oppgaven: API gir 404 → feil-tilstand.
 
 **Steg 9 – Navigere på tvers**
 Hjem-taben: `Link` til annen tab, rett til `/tasks/3` (tilbake virker takket være
 `initialRouteName`), `router.push` fra kode.
+
+**Steg 10 – Innlogget bruker i context**
+`contexts/AuthContext.tsx`: les livsløpet i kommentaren. Start appen og se
+`[auth] Henter innlogget bruker` i konsollen – én gang. Bytt tab, åpne detalj og modal:
+ingen ny henting. Refresh (F5 / «r» i Metro): borte fra minnet → hentes på nytt.
+«Hent bruker på nytt» på Profil simulerer det samme.
 
 ---
 
@@ -152,10 +164,11 @@ Hjem-taben: `Link` til annen tab, rett til `/tasks/3` (tilbake virker takket væ
 | Demo | Navigasjon |
 | --- | --- |
 | Én skjerm (`index.tsx`) | Mange skjermer i et rutetre |
-| `tasks` i `useState` + props | `tasks` i Context (`useTasks()`) |
-| `TaskLayout` + `SafeAreaView` tegner header | Navigatoren tegner header og tab-bar |
-| Data fra lokal konstant | Også data fra eksternt API (`useEffect` og `useQuery`) |
-| Fem liste- og tre skjemavarianter | Én av hver – fokus på navigasjon |
+| `TasksContext` var valgfritt (alt på én skjerm) | `TasksContext` er nødvendig (skjermer kan ikke få props) |
+| `TaskList` med `TaskRegister` inni, `.map` | `TaskList` med `FlatList`, `TaskRegister` i egen modal |
+| `TaskItem`: hele raden toggler | `TaskItem`: raden er en `Link`, boksen toggler |
+| `TaskLayout` tegner header | Navigatoren tegner header og tab-bar |
+| Data fra lokal konstant | Også data fra API (`useEffect`, `useQuery`) og innlogget bruker (`AuthContext`) |
 
 ---
 
@@ -173,7 +186,7 @@ Parentes = gruppe, kun for organisering – ikke med i URL-en. `tasks/` uten par
 `/tasks`. Derfor er `(drawer)/(tabs)/index.tsx` bare `/`.
 
 **Hvorfor kan jeg ikke legge komponenter i `app/`?**
-Alt i `app/` blir en rute. En `task-item.tsx` der ville blitt en skjerm på `/task-item`.
+Alt i `app/` blir en rute. En `TaskItem.tsx` der ville blitt en skjerm på `/TaskItem`.
 Derfor ligger gjenbrukbare komponenter i `src/components/`.
 
 **Må jeg liste opp alle skjermene i `_layout.tsx`?**
@@ -267,7 +280,7 @@ fra `scheme` i `app.json`) er ikke registrert i Expo Go – det virker først i 
 development build (`npx expo run:ios`). Bytt `tasks/3` med `finnes-ikke` for å se
 `+not-found`. Fysisk telefon: bruk IP-en Metro viser i terminalen.
 
-**Hvorfor to `Pressable` i `task-item.tsx`?**
+**Hvorfor to `Pressable` i `TaskItem.tsx`?**
 Raden har to handlinger: trykk på raden → **naviger** til detalj, trykk på boksen →
 **toggle** (bli på lista). Når to Pressable er nøstet, får den innerste trykket – så et
 trykk på boksen navigerer ikke. Vil man ha det enklere: fjern den indre og la
@@ -363,8 +376,9 @@ bevegelsene.
 | Type | Fil | Verktøy | Kjør |
 | --- | --- | --- | --- |
 | Util | `src/utils/task-schema.test.ts` | Vitest | `pnpm test` |
-| Komponent | `src/components/task-register.test.tsx` | Vitest + vitest-native + Testing Library | `pnpm test` |
+| Komponent | `src/components/tasks/TaskRegister.test.tsx` | Vitest + vitest-native + Testing Library | `pnpm test` |
 | E2E | `e2e/navigation.spec.ts` | Playwright (web) | `pnpm e2e` |
+| E2E | `e2e/auth.spec.ts` – brukeren hentes ved oppstart og refresh, ikke ved navigasjon | Playwright (web) | `pnpm e2e` |
 
 `pnpm test:watch` kjører Vitest på nytt ved lagring, `pnpm e2e:ui` viser hvert steg i
 Playwrights UI. Første gang e2e: `npx playwright install chromium`.

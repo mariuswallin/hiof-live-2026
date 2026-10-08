@@ -1,8 +1,8 @@
 import { Link } from "expo-router";
 import { StyleSheet } from "react-native";
 
-import { Empty } from "@/components/empty";
-import { Screen } from "@/components/screen";
+import { Empty } from "@/components/shared/Empty";
+import { Screen } from "@/components/shared/Screen";
 import { Theme } from "@/constants/theme";
 
 /**

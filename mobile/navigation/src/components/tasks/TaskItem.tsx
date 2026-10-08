@@ -1,18 +1,18 @@
 import { Link } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { Icon } from "@/components/icon";
+import { Icon } from "@/components/shared/Icon";
 import { Theme } from "@/constants/theme";
 import type { Task } from "@/utils/task-schema";
 
 type TaskItemProps = {
   task: Task;
-  onToggle?: (id: string) => void;
+  onToggle: (id: string) => void;
 };
 
 /**
- * Samme TaskItem som i hiof-live-2026 (checkbox + tittel i en rad), med to
- * tillegg for navigasjon:
+ * Samme TaskItem som i demo-appen (samme props: task + onToggle, checkbox +
+ * tittel i en rad), med to tillegg for navigasjon:
  *
  * - en ">" til høyre som viser at raden kan åpnes
  * - hele raden er en <Link> til detaljsiden
@@ -39,8 +39,7 @@ export function TaskItem({ task, onToggle }: TaskItemProps) {
           trykk her toggler bare - uten å navigere.
         */}
         <Pressable
-          onPress={() => onToggle?.(id)}
-          disabled={!onToggle}
+          onPress={() => onToggle(id)}
           hitSlop={8}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: done }}

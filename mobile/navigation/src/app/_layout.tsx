@@ -3,7 +3,8 @@ import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { Theme } from "@/constants/theme";
-import { TasksProvider } from "@/context/tasks-context";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { TasksProvider } from "@/contexts/TasksContext";
 
 /**
  * ROT-LAYOUTEN - det ytterste laget i appen.
@@ -41,25 +42,36 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       {/* Providers ligger OVER navigatoren, så ALLE skjermer når dem. */}
       <QueryClientProvider client={queryClient}>
-        <TasksProvider>
-          <Stack
-            screenOptions={{
-              headerTintColor: Theme.primary,
-              contentStyle: { backgroundColor: Theme.background },
-            }}
-          >
-            {/* Skuffen har sine egne headere - skjul rot-Stackens. */}
-            <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
+        {/*
+          AuthProvider ytterst av våre egne providers:
+          - Den mountes ÉN gang når appen starter og henter brukeren da.
+          - Den unmountes aldri når vi navigerer, så brukeren "lever" i
+            context helt til appen refreshes/lukkes (se AuthContext.tsx).
+          - Over TasksProvider, fordi oppgaver hører til en bruker. Skal
+            oppgavene hentes fra et API senere, kan TasksProvider bruke
+            useAuth() for å vite HVEM den skal hente for.
+        */}
+        <AuthProvider>
+          <TasksProvider>
+            <Stack
+              screenOptions={{
+                headerTintColor: Theme.primary,
+                contentStyle: { backgroundColor: Theme.background },
+              }}
+            >
+              {/* Skuffen har sine egne headere - skjul rot-Stackens. */}
+              <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
 
-            {/* presentation: "modal" = glir opp nedenfra (iOS: kort-stil). */}
-            <Stack.Screen
-              name="new-task"
-              options={{ presentation: "modal", title: "Ny oppgave" }}
-            />
+              {/* presentation: "modal" = glir opp nedenfra (iOS: kort-stil). */}
+              <Stack.Screen
+                name="new-task"
+                options={{ presentation: "modal", title: "Ny oppgave" }}
+              />
 
-            <Stack.Screen name="+not-found" options={{ title: "Oops" }} />
-          </Stack>
-        </TasksProvider>
+              <Stack.Screen name="+not-found" options={{ title: "Oops" }} />
+            </Stack>
+          </TasksProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>
   );

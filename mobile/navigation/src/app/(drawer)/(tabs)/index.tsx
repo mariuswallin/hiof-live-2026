@@ -1,10 +1,11 @@
 import { Link, router } from "expo-router";
 import { Pressable, StyleSheet, Text } from "react-native";
 
-import { Card } from "@/components/card";
-import { Screen } from "@/components/screen";
+import { Card } from "@/components/shared/Card";
+import { Screen } from "@/components/shared/Screen";
 import { Theme } from "@/constants/theme";
-import { useTasks } from "@/context/tasks-context";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTasks } from "@/contexts/TasksContext";
 
 /**
  * "/" - Hjem-taben. Appen MÅ ha en rute for "/", og det er denne.
@@ -15,9 +16,18 @@ import { useTasks } from "@/context/tasks-context";
 export default function HomeScreen() {
   const { tasks } = useTasks();
   const doneCount = tasks.filter((task) => task.done).length;
+  // Samme bruker som på Profil - begge leser fra AuthContext, ingen henter selv.
+  const { user } = useAuth();
 
   return (
     <Screen>
+      {/* user er null rett etter oppstart, til AuthProvider har fått svar. */}
+      <Card title={user ? `Hei, ${user.firstName}!` : "Hei!"}>
+        <Text style={styles.muted}>
+          {user ? user.email : "Henter bruker ..."}
+        </Text>
+      </Card>
+
       <Card title="Status">
         <Text style={styles.big}>
           {doneCount} av {tasks.length}

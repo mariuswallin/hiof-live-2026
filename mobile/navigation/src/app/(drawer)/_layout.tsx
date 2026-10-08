@@ -2,7 +2,7 @@ import { router } from "expo-router";
 import { Drawer, type DrawerNavigationProp } from "expo-router/drawer";
 import type { ParamListBase } from "expo-router/react-navigation";
 
-import { Icon } from "@/components/icon";
+import { Icon } from "@/components/shared/Icon";
 import { Theme } from "@/constants/theme";
 
 /**

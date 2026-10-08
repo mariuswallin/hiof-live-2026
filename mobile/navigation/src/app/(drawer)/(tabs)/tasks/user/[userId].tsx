@@ -4,10 +4,10 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 
 import { fetchUser } from "@/api/dummy-json";
-import { Card } from "@/components/card";
-import { Empty } from "@/components/empty";
-import { Loading } from "@/components/loading";
-import { Screen } from "@/components/screen";
+import { Card } from "@/components/shared/Card";
+import { Empty } from "@/components/shared/Empty";
+import { Loading } from "@/components/shared/Loading";
+import { Screen } from "@/components/shared/Screen";
 import { Theme } from "@/constants/theme";
 
 /**

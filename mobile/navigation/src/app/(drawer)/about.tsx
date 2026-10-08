@@ -1,7 +1,7 @@
 import { StyleSheet, Text } from "react-native";
 
-import { Card } from "@/components/card";
-import { Screen } from "@/components/screen";
+import { Card } from "@/components/shared/Card";
+import { Screen } from "@/components/shared/Screen";
 import { Theme } from "@/constants/theme";
 
 /** "/about" - enda en skjerm som bare finnes i skuffen. */
