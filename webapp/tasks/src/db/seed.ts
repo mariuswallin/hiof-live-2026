@@ -31,6 +31,9 @@ export const seedData = async (env: Env) => {
       completed: true,
       userId: user.id,
       dueDate: new Date(Date.now() - 86_400_000),
+      // Ett minutt eldre enn den neste. createdAt lagres i hele sekunder, så
+      // uten dette får begge samme tid, og rekkefølgen i lista blir tilfeldig.
+      createdAt: new Date(Date.now() - 60_000),
     },
     {
       title: "Sette opp prosjektet",

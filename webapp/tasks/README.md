@@ -70,9 +70,13 @@ src/
 │     ├─ task-routes.ts      /api/tasks med vakter
 │     ├─ actions.ts          server actions ("use server")
 │     ├─ task-api.ts         fetch mot API-et fra nettleseren
-│     ├─ components/         TaskList, TaskItem, CreateTaskForm
+│     ├─ utils/              rene funksjoner, ingen database
+│     │  ├─ validate-task.ts         reglene for en oppgave
+│     │  ├─ parse-params.ts          URL -> { q: "oblig" } (tekst)
+│     │  └─ validate-list-params.ts  tekst -> typer, og er de lovlige?
+│     ├─ components/         TaskList, TaskItem, CreateTaskForm, TaskFilter
 │     ├─ pages/TasksPage.tsx /tasks
-│     └─ __tests__/          skjematest + integrasjonstest mot SQLite
+│     └─ __tests__/          komponent-, util-, controller- og integrasjonstest
 ├─ db/
 │  ├─ schema/              tabellene. Eksempel: users og tasks
 │  ├─ relations.ts         relasjonene mellom tabellene
@@ -81,7 +85,8 @@ src/
 ├─ lib/
 │  ├─ id.ts                createId(), en id-generator
 │  ├─ result.ts            Result<T>, Errors, executeDbOperation
-│  └─ response.ts          Result -> Response med riktig statuskode
+│  ├─ response.ts          Result -> Response med riktig statuskode
+│  └─ demo-chaos.ts        kunstig treghet og tilfeldige feil i dev
 └─ test/setup-dom.ts       kjøres før hver testfil
 
 e2e/                       Playwright-tester i ekte nettleser
@@ -95,6 +100,66 @@ Konfigurasjonen ligger i rota: `wrangler.jsonc` (hva appen har tilgang til),
 
 **Tabellene i `src/db/schema/` er et eksempel.** Bytt dem ut med deres egen
 datamodell, kjør `npm run migrate:new`, og dere har en ny migrasjon.
+
+---
+
+## Rød tråd: lag en oppgave
+
+Følg én oppgave fra skjemaet til databasen og tilbake. Hver fil har én jobb,
+og create går gjennom alle.
+
+| # | Fil | Hva skjer med «create» |
+| --- | --- | --- |
+| 1 | `components/CreateTaskForm.tsx` | skjema med `title` og `dueDate`, `useActionState` |
+| 2 | `components/TaskList.tsx` | `useOptimistic` viser oppgaven før serveren svarer |
+| 3 | `actions.ts` | `createTaskAction`: FormData -> vanlige verdier, `""` -> ingen frist |
+| 3b | `task-api.ts` -> `task-routes.ts` -> `task-controller.ts` | samme vei med fetch: `POST /api/tasks`, `requireUser`, JSON, 201 + `Location` |
+| 4 | `task-service.ts` | innlogget? så Zod (formen), så `validateTask` (regelen), eier fra `ctx.user` |
+| 5 | `task-schema.ts` | `createTaskSchema`: tar bare `title`, `completed`, `dueDate` |
+| 6 | `utils/validate-task.ts` | tom eller for lang tittel, frist før i dag |
+| 7 | `task-repository.ts` | `insert ... returning`, feil blir et Result |
+| 8 | `src/db/schema/task-schema.ts` | tabellen, `CreateTask`-typen, id og `createdAt` lages her |
+| 9 | `task-mapper.ts` | rad -> `TaskDTO`, datoer som ISO, uten `userId` |
+| 10 | `pages/TasksPage.tsx` + `TaskItem.tsx` | rwsdk rendrer på nytt, den ekte oppgaven erstatter den optimistiske |
+
+Testene følger samme tråd: `CreateTaskForm.test.tsx` (1), `task-controller.test.ts`
+(3b), `task-service.test.ts` (4–8 mot SQLite i minnet), `validate-task.test.ts`
+(6), `task-mapper.test.ts` (9) og `e2e/tasks.e2e.ts` (alt sammen).
+
+---
+
+## Rød tråd: list oppgaver
+
+Samme lag, motsatt vei: fra URL-en til databasen og tilbake.
+
+**List er skrevet ut uten hjelpere.** Ingen `respond`, `readJson`,
+`executeDbOperation` eller `ResultHandler`: hvert lag lager sitt `Result` og
+sin `Response` selv. Sammenlign med create, som gjør nøyaktig det samme, bare
+kortere.
+
+| # | Fil | Hva skjer med «list» |
+| --- | --- | --- |
+| 1 | `components/TaskFilter.tsx` | GET-skjema. Nettleseren lager `/tasks?q=oblig&completed=false` selv |
+| 2 | `pages/TasksPage.tsx` | `parseParams(request)`, så `taskService.list(ctx.user, params)` |
+| 2b | `task-api.ts` -> `task-routes.ts` -> `task-controller.ts` | samme vei med fetch: `GET /api/tasks?...`, `parseParams`, `Response.json` med 200 / 400 |
+| 3 | `utils/parse-params.ts` | URL -> `{ completed: "false", q: "oblig" }`. Fortsatt tekst |
+| 4 | `task-service.ts` | `validateListParams`, 400 med feil per felt, ellers repositoryet |
+| 5 | `utils/validate-list-params.ts` | `"false"` -> `false`, `"5"` -> `5`, `limit` 1–100, tomt = ikke satt |
+| 6 | `task-repository.ts` | `db.query.tasks.findMany({ where, orderBy, limit })`, `try/catch` skrevet ut |
+| 7 | `task-mapper.ts` | rad -> `TaskDTO` |
+| 8 | `components/TaskList.tsx` + `TaskItem.tsx` | viser lista |
+
+Query-parametere (`?q=oblig`) er ikke det samme som `params` i rwsdk. Det er
+sti-parametere (`/api/tasks/:id` -> `params.id`).
+
+```bash
+curl -s "localhost:5173/api/tasks?completed=false&q=oblig&limit=5"
+curl -i "localhost:5173/api/tasks?limit=tull"      # 400, feil per felt
+```
+
+Testene, ett lag hver: `TaskFilter.test.tsx` (1, komponent), `list-params.test.ts`
+(3 og 5, util), `task-controller.test.ts` (2b), `task-service.test.ts` (4–7 mot
+SQLite i minnet) og `e2e/tasks.e2e.ts` (filteret i ekte nettleser).
 
 ---
 
@@ -161,6 +226,76 @@ så bruk den på de viktige flytene.
 npx playwright install chromium   # bare første gang
 npm run test:e2e
 ```
+
+---
+
+## Tregt nett og tilfeldige feil (demo)
+
+I `npm run dev` er serveren med vilje treg, og lagring feiler ca. hver 3. gang.
+Da ser dere skjelettet mens lista lastes, «lagrer…», og at `useOptimistic`
+ruller tilbake. Se `src/lib/demo-chaos.ts`.
+
+Av i produksjon, og av for forespørsler med headeren `x-demo-chaos: off`.
+Playwright sender den, så e2e-testene er stabile.
+
+---
+
+## Breakpoints i VS Code
+
+Koden kjører tre forskjellige steder, og hvert sted trenger sin debugger:
+
+| Kode | Kjører i | Debugger |
+| --- | --- | --- |
+| server-komponenter, actions, controller, service | `workerd` | attach til port 9229 |
+| `"use client"`-komponenter | nettleseren | Chrome |
+| Vitest-tester | Node | launch Vitest |
+
+Åpne `webapp/tasks` som mappe i VS Code, og lag `.vscode/launch.json`:
+
+```jsonc
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // 1. Start `npm run dev` først. 2. Kjør denne. 3. Last siden.
+      "name": "Worker (server)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "cwd": "/",
+      "resolveSourceMapLocations": null,
+      "attachExistingChildren": false,
+      "autoAttachChildProcesses": false,
+      "sourceMaps": true
+    },
+    {
+      "name": "Nettleser (klient)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173/tasks",
+      "webRoot": "${workspaceFolder}"
+    },
+    {
+      // Åpne en testfil, og kjør denne.
+      "name": "Vitest (denne fila)",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+      "args": ["run", "${relativeFile}"],
+      "autoAttachChildProcesses": true,
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"],
+      "smartStep": true,
+      "console": "integratedTerminal"
+    }
+  ]
+}
+```
+
+Port 9229 er standard. Er den opptatt (en annen dev-server kjører), velger Vite
+en annen og skriver `Default inspector port 9229 not available, using 9230
+instead`. Bytt da `port`, eller stopp den andre serveren.
+
+`debugger;` i koden virker også, så lenge en debugger er koblet til.
 
 ---
 

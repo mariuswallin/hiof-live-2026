@@ -60,7 +60,7 @@ describe("CreateTaskForm", () => {
         message: "Ugyldige felter",
         fieldErrors: { title: ["Tittel kan ikke være tom"] },
       },
-      values: { title: "  " },
+      values: { title: "  ", dueDate: "" },
     });
     render(<CreateTaskForm action={action} />);
 
@@ -82,7 +82,7 @@ describe("CreateTaskForm", () => {
     const action = fakeAction({
       success: false,
       error: { code: "UNAUTHORIZED", message: "Du må være innlogget" },
-      values: { title: "Hei" },
+      values: { title: "Hei", dueDate: "" },
     });
     render(<CreateTaskForm action={action} />);
 
@@ -94,7 +94,44 @@ describe("CreateTaskForm", () => {
     );
   });
 
-  it("kaller onOptimisticCreate med tittelen før serveren svarer", async () => {
+  it("sender fristen med, og tom frist som tom tekst", async () => {
+    const user = userEvent.setup();
+    const action = fakeAction(successResponse);
+    render(<CreateTaskForm action={action} />);
+
+    await user.type(screen.getByLabelText("Ny oppgave"), "Med frist");
+    await user.type(screen.getByLabelText("Frist (valgfri)"), "2030-01-15");
+    await user.click(screen.getByRole("button", { name: "Legg til" }));
+
+    const formData = action.mock.calls[0][1];
+    expect(formData.get("dueDate")).toBe("2030-01-15");
+  });
+
+  it("viser fristfeilen fra serveren og beholder datoen", async () => {
+    const user = userEvent.setup();
+    const action = fakeAction({
+      success: false,
+      error: {
+        code: "BAD_REQUEST",
+        message: "Ugyldige felter",
+        fieldErrors: { dueDate: ["Fristen kan ikke være før i dag"] },
+      },
+      values: { title: "For sent", dueDate: "2000-01-01" },
+    });
+    render(<CreateTaskForm action={action} />);
+
+    await user.type(screen.getByLabelText("Ny oppgave"), "For sent");
+    await user.click(screen.getByRole("button", { name: "Legg til" }));
+
+    expect(
+      await screen.findByText("Fristen kan ikke være før i dag"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Frist (valgfri)")).toHaveValue("2000-01-01");
+    // Feltfeil, så ingen generell feilmelding i tillegg.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("kaller onOptimisticCreate med verdiene før serveren svarer", async () => {
     const user = userEvent.setup();
     const onOptimisticCreate = vi.fn();
     render(
@@ -107,6 +144,9 @@ describe("CreateTaskForm", () => {
     await user.type(screen.getByLabelText("Ny oppgave"), "Rask");
     await user.click(screen.getByRole("button", { name: "Legg til" }));
 
-    expect(onOptimisticCreate).toHaveBeenCalledWith("Rask");
+    expect(onOptimisticCreate).toHaveBeenCalledWith({
+      title: "Rask",
+      dueDate: "",
+    });
   });
 });

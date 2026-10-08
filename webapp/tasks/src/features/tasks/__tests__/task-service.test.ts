@@ -118,6 +118,21 @@ describe("taskService.create", () => {
     });
   });
 
+  it("gir feil per felt når dueDate ikke er en dato", async () => {
+    const result = await service.create(bruker, {
+      title: "Rar frist",
+      dueDate: "tull",
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        code: "BAD_REQUEST",
+        fieldErrors: { dueDate: [expect.stringContaining("dato")] },
+      },
+    });
+  });
+
   it("ignorerer id og eier fra klienten", async () => {
     // Klienten prøver å sette id og eier selv. Zod skal kaste begge.
     const result = await service.create(bruker, {
@@ -165,6 +180,31 @@ describe("taskService.list og get", () => {
     expect(result.data.map((task) => task.title).sort()).toEqual(["En", "To"]);
   });
 
+  // Params kommer som tekst, slik parseParams gir dem. Ekte SQL kjører:
+  // WHERE completed = ? AND title LIKE ? LIMIT ?
+  it("filtrerer på params", async () => {
+    await service.create(bruker, { title: "Skrive obligen", completed: true });
+    await service.create(bruker, { title: "Lese obligen" });
+    await service.create(bruker, { title: "Handle mat" });
+
+    const result = await service.list(null, { completed: "false", q: "oblig" });
+
+    expectSuccess(result);
+    expect(result.data.map((task) => task.title)).toEqual(["Lese obligen"]);
+  });
+
+  it("avviser ugyldige params med BAD_REQUEST og feil per felt", async () => {
+    const result = await service.list(null, { limit: "ti" });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        code: "BAD_REQUEST",
+        fieldErrors: { limit: [expect.any(String)] },
+      },
+    });
+  });
+
   it("gir NOT_FOUND for en id som ikke finnes", async () => {
     const result = await service.get(null, "finnesikke");
 
@@ -197,6 +237,34 @@ describe("taskService.update", () => {
       success: false,
       error: { code: "NOT_FOUND" },
     });
+  });
+
+  it("avviser en update uten felter med BAD_REQUEST, ikke 500", async () => {
+    const created = await service.create(bruker, { title: "Uendret" });
+    expectSuccess(created);
+
+    // `{}` er gyldig form, men Drizzle kaster på en UPDATE uten verdier.
+    const result = await service.update(bruker, created.data.id, {});
+
+    expect(result).toMatchObject({
+      success: false,
+      error: { code: "BAD_REQUEST" },
+    });
+  });
+
+  it("fjerner fristen når dueDate er null", async () => {
+    const created = await service.create(bruker, {
+      title: "Med frist",
+      dueDate: "2099-12-31",
+    });
+    expectSuccess(created);
+
+    const result = await service.update(bruker, created.data.id, {
+      dueDate: null,
+    });
+
+    expectSuccess(result);
+    expect(result.data.dueDate).toBeNull();
   });
 });
 

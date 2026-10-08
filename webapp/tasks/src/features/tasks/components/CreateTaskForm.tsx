@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import type { CreateTaskFormState } from "../actions";
+import type { CreateTaskFormState, CreateTaskFormValues } from "../actions";
 
 type CreateTaskAction = (
   prevState: CreateTaskFormState,
@@ -32,12 +32,15 @@ export function CreateTaskForm({
   onOptimisticCreate,
 }: {
   action: CreateTaskAction;
-  onOptimisticCreate?: (title: string) => void;
+  onOptimisticCreate?: (values: CreateTaskFormValues) => void;
 }) {
   const [state, formAction, isPending] = useActionState(
     async (prevState: CreateTaskFormState, formData: FormData) => {
       // Vi er inne i en transition her, så det er lov å oppdatere optimistisk.
-      onOptimisticCreate?.(String(formData.get("title") ?? ""));
+      onOptimisticCreate?.({
+        title: String(formData.get("title") ?? ""),
+        dueDate: String(formData.get("dueDate") ?? ""),
+      });
       return action(prevState, formData);
     },
     null,
@@ -46,6 +49,9 @@ export function CreateTaskForm({
   // `state?.success === false` snevrer typen, så `failed.values` finnes.
   const failed = state?.success === false ? state : null;
   const titleError = failed?.error.fieldErrors?.title?.[0];
+  // Frist i fortiden stoppes av validateTask i servicen, ikke her.
+  const dueDateError = failed?.error.fieldErrors?.dueDate?.[0];
+  const fieldError = titleError ?? dueDateError;
 
   return (
     <form
@@ -64,10 +70,21 @@ export function CreateTaskForm({
           // React 19 nullstiller skjemaet etter hver action. Ved feil gir vi
           // brukeren tilbake det hen skrev, via defaultValue fra serveren.
           defaultValue={failed?.values.title ?? ""}
-          aria-invalid={titleError ? true : undefined}
-          aria-describedby={titleError ? "title-error" : undefined}
           placeholder="Hva skal gjøres?"
           className="flex-1 rounded-md border border-slate-300 px-3 py-2"
+          aria-invalid={titleError ? true : undefined}
+          aria-describedby={titleError ? "title-error" : undefined}
+        />
+        <input
+          id="dueDate"
+          name="dueDate"
+          type="date"
+          // `type="date"` sender alltid "YYYY-MM-DD", eller "" når den er tom.
+          defaultValue={failed?.values.dueDate ?? ""}
+          aria-label="Frist (valgfri)"
+          aria-invalid={dueDateError ? true : undefined}
+          aria-describedby={dueDateError ? "dueDate-error" : undefined}
+          className="rounded-md border border-slate-300 px-3 py-2"
         />
         <button
           type="submit"
@@ -89,7 +106,12 @@ export function CreateTaskForm({
           {titleError}
         </p>
       )}
-      {failed && !titleError && (
+      {dueDateError && (
+        <p id="dueDate-error" className="text-sm text-red-600">
+          {dueDateError}
+        </p>
+      )}
+      {failed && !fieldError && (
         <p role="alert" className="text-sm text-red-600">
           {failed.error.message}
         </p>

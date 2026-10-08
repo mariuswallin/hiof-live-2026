@@ -2,7 +2,7 @@
 
 import { useOptimistic, useState, useTransition } from "react";
 import { navigate } from "rwsdk/client";
-import { createTaskAction } from "../actions";
+import { createTaskAction, type CreateTaskFormValues } from "../actions";
 import type { TaskDTO } from "../task-mapper";
 import { deleteTask } from "../task-api";
 import { CreateTaskForm } from "./CreateTaskForm";
@@ -58,14 +58,16 @@ export function TaskList({ tasks }: { tasks: TaskDTO[] }) {
   const [, startTransition] = useTransition();
 
   // Kalles fra skjemaet, INNE i transitionen useActionState starter.
-  const handleOptimisticCreate = (title: string) => {
+  // Samme form som TaskDTO, så TaskItem ikke ser forskjell. "2026-10-07" blir
+  // til ISO, akkurat som toTaskDTO gjør med datoen fra databasen.
+  const handleOptimisticCreate = ({ title, dueDate }: CreateTaskFormValues) => {
     updateOptimistic({
       type: "add",
       task: {
         id: `optimistic-${Date.now()}`,
-        title,
+        title: title.trim(),
         completed: false,
-        dueDate: null,
+        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
         createdAt: new Date().toISOString(),
         pending: true,
       },
@@ -118,7 +120,8 @@ export function TaskList({ tasks }: { tasks: TaskDTO[] }) {
 
       {optimisticTasks.length === 0 ? (
         <p className="mt-6 text-slate-500" data-testid="empty-list">
-          Ingen oppgaver ennå. Lag en over, eller kjør <code>npm run seed</code>.
+          Ingen oppgaver ennå. Lag en over, eller kjør <code>npm run seed</code>
+          .
         </p>
       ) : (
         <ul className="mt-6 space-y-2" data-testid="task-list">

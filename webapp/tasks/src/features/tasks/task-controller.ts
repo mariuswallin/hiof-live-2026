@@ -1,8 +1,13 @@
 import type { RequestInfo } from "rwsdk/worker";
 import { demoDelay, demoFailure } from "@/lib/demo-chaos";
-import { createErrorResponse, createSuccessResponse } from "@/lib/response";
+import {
+  codeToStatus,
+  createErrorResponse,
+  createSuccessResponse,
+} from "@/lib/response";
 import { Errors, ResultHandler, type Result } from "@/lib/result";
 import { taskService, type TaskService } from "./task-service";
+import { parseParams } from "./utils/parse-params";
 
 /**
  * CONTROLLER: oversetter mellom HTTP og servicen.
@@ -18,10 +23,33 @@ import { taskService, type TaskService } from "./task-service";
  *
  * Hver metode tar `RequestInfo`, det samme som en rwsdk-handler får. Da kan
  * de settes rett inn i route(...) i task-routes.ts.
+ *
+ * Samme mønster som TaskRepository og TaskService: interfacet sier HVA
+ * controlleren kan, factoryen under sier HVORDAN. Rutene kjenner bare
+ * interfacet.
  */
-export function createTaskController(service: TaskService) {
+export interface TaskController {
+  /** GET /api/tasks?completed=false&q=oblig&limit=5 */
+  list(requestInfo: RequestInfo): Promise<Response>;
+  /** GET /api/tasks/:id */
+  get(requestInfo: RequestInfo): Promise<Response>;
+  /** POST /api/tasks */
+  create(requestInfo: RequestInfo): Promise<Response>;
+  /** PUT /api/tasks/:id */
+  update(requestInfo: RequestInfo): Promise<Response>;
+  /** POST /api/tasks/:id/:action  (complete / uncomplete) */
+  action(requestInfo: RequestInfo): Promise<Response>;
+  /** DELETE /api/tasks/:id */
+  remove(requestInfo: RequestInfo): Promise<Response>;
+}
+
+export function createTaskController(service: TaskService): TaskController {
   /** Gir svaret: feil blir feilrespons, suksess blir 200 (eller det du ber om). */
-  const respond = <T>(result: Result<T>, status = 200, headers?: HeadersInit) =>
+  const respond = <T>(
+    result: Result<T>,
+    status = 200,
+    headers?: HeadersInit,
+  ) =>
     result.success
       ? createSuccessResponse(result.data, { status, headers })
       : createErrorResponse(result.error);
@@ -39,9 +67,36 @@ export function createTaskController(service: TaskService) {
   };
 
   return {
-    /** GET /api/tasks  200 */
-    async list({ ctx }: RequestInfo) {
-      return respond(await service.list(ctx.user));
+    /**
+     * GET /api/tasks?completed=false&q=oblig&limit=5  200 / 400
+     *
+     * Skrevet ut UTEN `respond`, så du ser hele veien fra Request til
+     * Response. Metodene under gjør det samme via `respond`.
+     */
+    async list({ request, ctx }: RequestInfo) {
+      // URL -> { completed: "false", q: "oblig", limit: "5" }. Fortsatt tekst.
+      // Om verdiene er lovlige, avgjør servicen.
+      const params = parseParams(request);
+
+      const result = await service.list(ctx.user, params);
+
+      if (!result.success) {
+        return Response.json(
+          { success: false, error: result.error },
+          {
+            // BAD_REQUEST -> 400, INTERNAL_SERVER_ERROR -> 500. Tabellen
+            // står i lib/response.ts.
+            status: codeToStatus(result.error.code),
+            // Feil skal aldri caches. Neste forsøk kan gå bra.
+            headers: { "Cache-Control": "no-store" },
+          },
+        );
+      }
+
+      return Response.json(
+        { success: true, data: result.data },
+        { status: 200 },
+      );
     },
 
     /** GET /api/tasks/:id  200 / 404 */

@@ -133,6 +133,36 @@ test("tom tittel gir valideringsfeil fra servicen", async ({ page }) => {
   await expect(page.getByText("Tittel kan ikke være tom")).toBeVisible();
 });
 
+test("frist i fortiden avvises, frist fram i tid lagres", async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto("/tasks");
+  await waitForHydration(page);
+  await logInAs(page, "Admin");
+
+  const title = `E2E frist ${Date.now()}`;
+  const dueDate = page.getByLabel("Frist (valgfri)");
+
+  // Regelen står i validateTask. Skjemaet vet ingenting om den.
+  await page.getByLabel("Ny oppgave").fill(title);
+  await dueDate.fill("2000-01-01");
+  await page.getByRole("button", { name: "Legg til" }).click();
+
+  await expect(page.getByText("Fristen kan ikke være før i dag")).toBeVisible();
+  // Det brukeren skrev, kommer tilbake fra serveren via `values`.
+  await expect(dueDate).toHaveValue("2000-01-01");
+  await expect(page.getByLabel("Ny oppgave")).toHaveValue(title);
+
+  await dueDate.fill("2099-12-31");
+  await page.getByRole("button", { name: "Legg til" }).click();
+
+  const created = taskItems(page).filter({ hasText: title });
+  await expect(created.getByTestId("due-date")).toHaveText("frist 2099-12-31");
+
+  // Rydd opp.
+  await created.getByRole("button", { name: "Slett" }).click();
+  await expect(created).toHaveCount(0);
+});
+
 test("vanlig bruker får 403 ved sletting, og oppgaven kommer tilbake", async ({
   page,
 }) => {
@@ -172,4 +202,31 @@ test("admin sletter via DELETE /api/tasks/:id", async ({ page }) => {
   await expect(created).toHaveCount(0);
   await page.reload();
   await expect(created).toHaveCount(0);
+});
+
+test("filteret legger søket i URL-en, og lista filtreres", async ({ page }) => {
+  await page.goto("/tasks");
+
+  // Et vanlig GET-skjema. Nettleseren lager ?q=...&completed=... selv.
+  await page.getByLabel("Søk").fill("Lese leksjonen");
+  await page.getByRole("button", { name: "Filtrer" }).click();
+
+  await expect(page).toHaveURL(/\/tasks\?q=Lese\+leksjonen&completed=$/);
+  await expect(taskItems(page)).toHaveCount(1);
+  await expect(taskItems(page)).toContainText("Lese leksjonen før timen");
+
+  // URL-en ER tilstanden: last på nytt, og søket står der fortsatt.
+  await page.reload();
+  await expect(page.getByLabel("Søk")).toHaveValue("Lese leksjonen");
+  await expect(taskItems(page)).toHaveCount(1);
+});
+
+test("ugyldig parameter i URL-en gir feilmelding, ikke krasj", async ({
+  page,
+}) => {
+  await page.goto("/tasks?limit=tull");
+
+  await expect(page.getByRole("alert")).toContainText(
+    "limit må være et heltall"
+  );
 });

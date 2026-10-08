@@ -75,6 +75,13 @@ export function TaskItem({
           >
             {task.title}
           </span>
+          {task.dueDate && (
+            // ISO fra DTO-en: "2026-10-07T00:00:00.000Z". Datodelen holder,
+            // og blir lik på server og klient (ingen tidssone, ingen locale).
+            <span className="text-xs text-slate-500" data-testid="due-date">
+              frist {task.dueDate.slice(0, 10)}
+            </span>
+          )}
         </label>
 
         <span className="text-xs text-slate-400" data-testid="status">

@@ -1,4 +1,4 @@
-import { Tabs } from "expo-router";
+import { Tabs } from "expo-router/js-tabs";
 import { DrawerToggleButton } from "expo-router/drawer";
 
 import { Icon } from "@/components/icon";

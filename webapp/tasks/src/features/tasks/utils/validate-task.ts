@@ -11,7 +11,7 @@
  * dag, står reglene og testene urørt.
  *
  * Skrevet med TDD i tre runder, én ny oppførsel per runde. Se
- * __tests__/validate-task.test.ts.
+ * ../__tests__/validate-task.test.ts.
  *
  * Svaret har samme form som `validatePost` i slidene: `{ ok: true }` eller
  * `{ ok: false, ... }`. Servicen oversetter det til et Result med feil per
@@ -21,6 +21,13 @@
  * bestemme hva "i dag" er, og testen gir samme svar hver dag.
  */
 export const TITLE_MAX_LENGTH = 200;
+
+/**
+ * Appen er norsk, så "i dag" er datoen i Oslo. Workeren går på UTC, og
+ * klokka 00.30 norsk tid er det fortsatt i går i UTC. Med UTC-datoen ville
+ * gårsdagen sluppet gjennom i to timer hver natt.
+ */
+export const TIME_ZONE = "Europe/Oslo";
 
 export type TaskField = "title" | "dueDate";
 
@@ -52,7 +59,7 @@ export function validateTask(
 
   // Sammenlign med starten av dagen, ikke med klokkeslettet nå. "2026-10-06"
   // blir midnatt UTC, og en frist i dag skal ikke avvises fordi klokka er 09.
-  if (task.dueDate && task.dueDate < startOfDayUtc(now)) {
+  if (task.dueDate && task.dueDate < startOfToday(now)) {
     return {
       ok: false,
       field: "dueDate",
@@ -63,7 +70,13 @@ export function validateTask(
   return { ok: true };
 }
 
-const startOfDayUtc = (date: Date) =>
-  new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
-  );
+/**
+ * Midnatt UTC på DAGENS DATO I OSLO. Samme form som Zod gir for "2026-10-06",
+ * så de to kan sammenlignes direkte. "en-CA" skriver datoen som 2026-10-06.
+ */
+const startOfToday = (now: Date) => {
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIME_ZONE,
+  }).format(now);
+  return new Date(`${today}T00:00:00.000Z`);
+};

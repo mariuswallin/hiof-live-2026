@@ -23,9 +23,12 @@ import { taskController } from "./task-controller";
  *   ID=$(curl -s localhost:5173/api/tasks | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
  *
  *   curl -s localhost:5173/api/tasks
+ *   curl -s "localhost:5173/api/tasks?completed=false&q=oblig&limit=5"
+ *   curl -i "localhost:5173/api/tasks?limit=tull"   (400, validateListParams)
  *   curl -i localhost:5173/api/tasks/finnesikke
  *   curl -i -X POST localhost:5173/api/tasks -H "content-type: application/json" -H "x-demo-user: admin" -d '{"title":"Skrive obligen"}'
  *   curl -i -X POST localhost:5173/api/tasks -H "content-type: application/json" -H "x-demo-user: admin" -d '{"title":""}'
+ *   curl -i -X POST localhost:5173/api/tasks -H "content-type: application/json" -H "x-demo-user: admin" -d '{"title":"Med frist","dueDate":"2000-01-01"}'   (400, validateTask)
  *   curl -i -X PUT localhost:5173/api/tasks/$ID -H "content-type: application/json" -H "x-demo-user: admin" -d '{"title":"Nytt navn","completed":true}'
  *   curl -i -X POST localhost:5173/api/tasks/$ID/complete -H "x-demo-user: admin"
  *   curl -i -X DELETE localhost:5173/api/tasks/$ID -H "x-demo-user: bruker"   (403)
@@ -67,6 +70,9 @@ export const taskRoutes = [
      *     x-demo-user: bruker     403  { success: false, error: { code: "FORBIDDEN", ... } }
      *     x-demo-user: admin      204  (tom body)
      *     samme id én gang til    404  { success: false, error: { code: "NOT_FOUND", ... } }
+     *
+     *   I `npm run dev` er DELETE treg med vilje, og omtrent hver tredje gir
+     *   500 (src/lib/demo-chaos.ts). Headeren `x-demo-chaos: off` skrur det av.
      * ---------------------------------------------------------------------
      *
      * TANKE: Thunder Client kan sette hvilken som helst header. Hva sier det

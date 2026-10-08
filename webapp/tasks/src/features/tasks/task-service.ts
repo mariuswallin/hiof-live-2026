@@ -5,7 +5,9 @@ import { Errors, ResultHandler, type Result } from "@/lib/result";
 import { toTaskDTO, type TaskDTO } from "./task-mapper";
 import { taskRepository, type TaskRepository } from "./task-repository";
 import { createTaskSchema, updateTaskSchema } from "./task-schema";
-import { validateTask, type TaskValidation } from "./validate-task";
+import type { Params } from "./utils/parse-params";
+import { validateListParams } from "./utils/validate-list-params";
+import { validateTask, type TaskValidation } from "./utils/validate-task";
 
 /**
  * SERVICE: forretningsregler OG tilgang.
@@ -51,7 +53,8 @@ import { validateTask, type TaskValidation } from "./validate-task";
  * Hvorfor kan ikke mellomvaren sjekke det? (Hint: den har ikke oppgaven.)
  */
 export interface TaskService {
-  list(user: SessionUser | null): Promise<Result<TaskDTO[]>>;
+  /** `params` er query-parametrene som tekst, rett fra parseParams. */
+  list(user: SessionUser | null, params?: Params): Promise<Result<TaskDTO[]>>;
   get(user: SessionUser | null, id: string): Promise<Result<TaskDTO>>;
   create(user: SessionUser | null, input: unknown): Promise<Result<TaskDTO>>;
   update(
@@ -81,6 +84,17 @@ const invalid = (error: z.ZodError) =>
     z.flattenError(error).fieldErrors,
   );
 
+/**
+ * `{}` er gyldig form, fordi alt er valgfritt i updateTaskSchema. Men da er
+ * det ingenting å endre, og Drizzle kaster "No values to set". Uten denne
+ * sjekken får klienten 500 for noe som er klientens feil.
+ */
+const nothingToUpdate = () =>
+  ResultHandler.failure<never>(
+    "Send minst ett felt å endre: title, completed eller dueDate",
+    Errors.BAD_REQUEST,
+  );
+
 /** Regelbrudd fra validateTask, i samme form som Zod-feilene over. */
 const ruleBroken = (rule: Extract<TaskValidation, { ok: false }>) =>
   ResultHandler.failure<never>("Ugyldige felter", Errors.BAD_REQUEST, {
@@ -105,14 +119,34 @@ export function createTaskService(repository: TaskRepository): TaskService {
   };
 
   return {
-    // Lesing er åpen i denne appen, så `user` brukes ikke ennå (derfor `_`).
-    // Den står der likevel: den dagen lista skal filtreres på eier
-    // (WHERE user_id = ?), sender alle kallere den allerede med.
-    async list(_user) {
-      const result = await repository.findMany();
+    /**
+     * Skrevet ut UTEN hjelperne (invalid, ruleBroken, ResultHandler), så du
+     * ser hele Result-formen. create under gjør det samme, bare kortere.
+     *
+     * Lesing er åpen i denne appen, så `user` brukes ikke ennå (derfor `_`).
+     * Den står der likevel: den dagen lista skal filtreres på eier
+     * (WHERE user_id = ?), sender alle kallere den allerede med.
+     */
+    async list(_user, params = {}) {
+      // Tekst inn, typer ut: { completed: "false" } -> { completed: false }.
+      // Samme jobb som Zod + validateTask gjør for create.
+      const checked = validateListParams(params);
+      if (!checked.ok) {
+        return {
+          success: false,
+          error: {
+            code: Errors.BAD_REQUEST,
+            message: "Ugyldige parametere",
+            fieldErrors: { [checked.field]: [checked.error] },
+          },
+        };
+      }
+
+      const result = await repository.findMany(checked.params);
       if (!result.success) return result;
 
-      return ResultHandler.success(result.data.map(toTaskDTO));
+      // Rad -> DTO. Ingen kaller får hele databaseraden.
+      return { success: true, data: result.data.map(toTaskDTO) };
     },
 
     async get(_user, id) {
@@ -140,6 +174,7 @@ export function createTaskService(repository: TaskRepository): TaskService {
 
       const parsed = updateTaskSchema.safeParse(input);
       if (!parsed.success) return invalid(parsed.error);
+      if (Object.keys(parsed.data).length === 0) return nothingToUpdate();
 
       const rule = validateTask(parsed.data);
       if (!rule.ok) return ruleBroken(rule);

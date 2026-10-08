@@ -34,8 +34,11 @@ import { taskService } from "./task-service";
  */
 export type CreateTaskFormState =
   | { success: true; task: TaskDTO }
-  | { success: false; error: ResultError; values: { title: string } }
+  | { success: false; error: ResultError; values: CreateTaskFormValues }
   | null;
+
+/** Det skjemaet sender, som tekst. `dueDate` er "" når feltet er tomt. */
+export type CreateTaskFormValues = { title: string; dueDate: string };
 
 /**
  * Lag en oppgave fra et skjema.
@@ -50,7 +53,10 @@ export async function createTaskAction(
 ): Promise<CreateTaskFormState> {
   // FormData gir `FormDataEntryValue | null`. String() gjør det til tekst, så
   // Zod i servicen kan gi en ordentlig feilmelding i stedet for en typefeil.
-  const values = { title: String(formData.get("title") ?? "") };
+  const values: CreateTaskFormValues = {
+    title: String(formData.get("title") ?? ""),
+    dueDate: String(formData.get("dueDate") ?? ""),
+  };
   const { ctx, request } = requestInfo;
 
   // Demo: tregt nett, og feil ca. hver 3. gang. Se lib/demo-chaos.ts.
@@ -59,7 +65,14 @@ export async function createTaskAction(
   if (chaos) return { success: false, error: chaos, values };
 
   // Ikke innlogget? Servicen svarer UNAUTHORIZED. Se punkt 2 over.
-  const result = await taskService.create(ctx.user, values);
+  // Et tomt datofelt sendes som "". Det er "ingen frist", ikke en ugyldig
+  // dato, så vi gjør det om til `undefined` før servicen (og Zod) ser det.
+  // "2026-10-07" går videre som tekst: Zod gjør den om til en Date, og
+  // validateTask sjekker at den ikke er før i dag.
+  const result = await taskService.create(ctx.user, {
+    title: values.title,
+    dueDate: values.dueDate || undefined,
+  });
 
   return result.success
     ? { success: true, task: result.data }

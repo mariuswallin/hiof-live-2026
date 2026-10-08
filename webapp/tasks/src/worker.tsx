@@ -8,7 +8,10 @@ import type { SessionUser } from "@/features/auth/auth-types";
 import { authRoutes } from "@/features/auth/auth-routes";
 import { setUser } from "@/features/auth/middleware";
 import { TasksPage } from "@/features/tasks/pages/TasksPage";
+import { toTaskDTO } from "@/features/tasks/task-mapper";
 import { taskRoutes } from "@/features/tasks/task-routes";
+import { createErrorResponse, createSuccessResponse } from "@/lib/response";
+import { Errors } from "@/lib/result";
 
 /**
  * Alt som ligger på `ctx` for én forespørsel.
@@ -49,7 +52,7 @@ const app = defineApp([
   ...taskRoutes,
 
   /**
-   * Én bruker med oppgavene sine.  200 OK / 404 / 401
+   * Én bruker med oppgavene sine.  200 OK / 400 / 401 / 404
    *
    * Står fortsatt her fordi den hører til en `users`-feature vi ikke har
    * laget ennå. TANKE: Hvordan ville features/users sett ut?
@@ -57,24 +60,28 @@ const app = defineApp([
    * `db.query` leser relations.ts, og `with: { tasks: true }` gir
    * bruker.tasks som et ferdig nøstet array, uten at vi skriver join selv.
    *
+   * Svaret har samme form som resten av API-et, og plukker ut feltene: navnet
+   * og oppgavene som TaskDTO. Ikke `{ user }` rett fra databasen. Da får alle
+   * som kjenner en id, e-posten til brukeren, og `userId` på hver oppgave.
+   *
    * curl -s localhost:5173/api/users/1/tasks
    * curl -s localhost:5173/api/users/me/tasks -H "x-demo-user: admin"
    */
   route("/api/users/:id/tasks", async ({ params, ctx }) => {
     if (params.id === "me" && !ctx.user) {
-      return Response.json(
-        { error: "Du må være innlogget for å bruke /me" },
-        { status: 401 },
-      );
+      return createErrorResponse({
+        code: Errors.UNAUTHORIZED,
+        message: "Du må være innlogget for å bruke /me",
+      });
     }
 
     const userId = params.id === "me" ? ctx.user!.id : Number(params.id);
 
     if (!Number.isInteger(userId)) {
-      return Response.json(
-        { error: `Ugyldig bruker-id: ${params.id}` },
-        { status: 400 },
-      );
+      return createErrorResponse({
+        code: Errors.BAD_REQUEST,
+        message: `Ugyldig bruker-id: ${params.id}`,
+      });
     }
 
     const user = await db.query.users.findFirst({
@@ -83,13 +90,17 @@ const app = defineApp([
     });
 
     if (!user) {
-      return Response.json(
-        { error: `Fant ingen bruker med id ${userId}` },
-        { status: 404 },
-      );
+      return createErrorResponse({
+        code: Errors.NOT_FOUND,
+        message: `Fant ingen bruker med id ${userId}`,
+      });
     }
 
-    return Response.json({ user });
+    return createSuccessResponse({
+      id: user.id,
+      name: user.name,
+      tasks: user.tasks.map(toTaskDTO),
+    });
   }),
 
   // Sider. render(Document, [...]) pakker dem i et helt HTML-dokument.

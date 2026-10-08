@@ -19,7 +19,7 @@ import { z } from "zod";
  *
  * Skjemaet svarer bare på FORMEN: er det tekst, er det en dato. Om innholdet
  * er LOVLIG (tom tittel, for lang, frist i fortiden) avgjør validateTask i
- * validate-task.ts, uten Zod. Da står reglene og testene deres i ren
+ * utils/validate-task.ts, uten Zod. Da står reglene og testene deres i ren
  * TypeScript, og servicen kjører begge: først formen, så regelen.
  *
  * `userId` står med vilje IKKE her. Hvem som eier oppgaven, tar vi fra
@@ -31,7 +31,13 @@ export const createTaskSchema = z.object({
   // Tom og for lang sjekkes i validateTask.
   title: z.string("title må være tekst").trim(),
   completed: z.boolean().optional(),
-  dueDate: z.coerce.date().optional(), // "2026-10-01" blir til en Date
+  // "2026-10-01" blir til en Date. `null` betyr ingen frist, og fjerner fristen
+  // ved PUT. `.nullable()` slipper null forbi coerce: ellers blir null til
+  // 1. januar 1970, og validateTask avviser den som en frist i fortiden.
+  dueDate: z.coerce
+    .date("dueDate må være en dato, for eksempel 2026-10-01")
+    .nullable()
+    .optional(),
 });
 
 // PUT gjenbruker samme regler, men alt er valgfritt: send bare det du endrer.

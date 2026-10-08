@@ -5,7 +5,7 @@
 // så kommer minst mulig kode for GRØNN, så rydding. Rekkefølgen her er
 // rekkefølgen testene ble skrevet i.
 import { describe, expect, it } from "vitest";
-import { TITLE_MAX_LENGTH, validateTask } from "../validate-task";
+import { TITLE_MAX_LENGTH, validateTask } from "../utils/validate-task";
 
 // "I dag" er låst, så testene gir samme svar hver dag.
 const now = new Date("2026-10-06T09:00:00.000Z");
@@ -60,6 +60,19 @@ describe("validateTask", () => {
     const dueDate = new Date("2026-10-06T00:00:00.000Z");
     expect(validateTask({ title: "I dag", dueDate }, now)).toEqual({
       ok: true,
+    });
+  });
+
+  // Funnet etter runde 3: workeren går på UTC. Rød med UTC-datoen, grønn
+  // med datoen i Oslo (TIME_ZONE).
+  it("bruker datoen i Oslo, ikke i UTC, rett etter midnatt", () => {
+    // 22.30 UTC 6. oktober er 00.30 norsk tid 7. oktober.
+    const night = new Date("2026-10-06T22:30:00.000Z");
+    const dueDate = new Date("2026-10-06T00:00:00.000Z");
+
+    expect(validateTask({ title: "Sent ute", dueDate }, night)).toMatchObject({
+      ok: false,
+      field: "dueDate",
     });
   });
 

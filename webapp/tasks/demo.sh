@@ -14,6 +14,11 @@ set -u
 
 BASE="${BASE:-http://localhost:5173}"
 
+# I `npm run dev` gjør src/lib/demo-chaos.ts DELETE treg, og lar omtrent hver
+# tredje feile med 500. Her vil vi se API-et, ikke kaoset, så alle curl-kall i
+# skriptet sender headeren som skrur det av. Kommandoene som vises, er uendret.
+curl() { command curl -H "x-demo-chaos: off" "$@"; }
+
 # Kjører én kommando: viser den først, så resultatet.
 step() {
   printf '\n\033[1;36m$ %s\033[0m\n' "$1"
@@ -37,6 +42,9 @@ step "curl -s $BASE/api/me -H 'x-demo-user: admin'"
 echo
 echo "== 3. Lesing er åpen =="
 step "curl -s $BASE/api/tasks"
+step "curl -s '$BASE/api/tasks?completed=false&limit=1'"
+step "curl -s '$BASE/api/tasks?q=lese'"
+step "curl -i '$BASE/api/tasks?limit=tull'"
 
 # Plukker ut id-en til første oppgave, så resten av demoen har noe å jobbe med.
 ID=$(curl -s "$BASE/api/tasks" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
@@ -65,6 +73,8 @@ step "curl -i -X POST $BASE/api/tasks -H 'content-type: application/json' -H 'x-
 echo
 echo "== 7. Endring og handlinger =="
 step "curl -i -X PUT $BASE/api/tasks/$ID -H 'content-type: application/json' -H 'x-demo-user: admin' -d '{\"title\":\"Nytt navn\"}'"
+step "curl -i -X PUT $BASE/api/tasks/$ID -H 'content-type: application/json' -H 'x-demo-user: admin' -d '{}'"
+step "curl -i -X PUT $BASE/api/tasks/$ID -H 'content-type: application/json' -H 'x-demo-user: admin' -d '{\"dueDate\":null}'"
 step "curl -i -X POST $BASE/api/tasks/$ID/complete -H 'x-demo-user: admin'"
 step "curl -i -X POST $BASE/api/tasks/$ID/tulle -H 'x-demo-user: admin'"
 step "curl -i $BASE/api/tasks/$ID/complete"
