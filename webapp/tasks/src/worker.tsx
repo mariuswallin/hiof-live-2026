@@ -3,9 +3,9 @@ import { render, route } from "rwsdk/router";
 import { Document } from "@/app/Document";
 import { setCommonHeaders } from "@/app/headers";
 import { Home } from "@/app/pages/Home";
-import { taskRoutes } from "./features/task-routes";
-import { TasksPage } from "./features/pages/TasksPage";
-import { TasksPageClient } from "./features/pages/TasksPageClient";
+import { taskRoutes } from "./features/tasks/task-routes";
+import { TasksPage } from "./features/tasks/pages/TasksPage";
+import { TasksPageClient } from "./features/tasks/pages/TasksPageClient";
 
 export type AppContext = {};
 
