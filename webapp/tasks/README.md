@@ -111,7 +111,7 @@ og create går gjennom alle.
 | # | Fil | Hva skjer med «create» |
 | --- | --- | --- |
 | 1 | `components/CreateTaskForm.tsx` | skjema med `title` og `dueDate`, `useActionState` |
-| 2 | `components/TaskList.tsx` | `useOptimistic` viser oppgaven før serveren svarer |
+| 2 | `components/TaskList.tsx` | sender server actionen inn i skjemaet |
 | 3 | `actions.ts` | `createTaskAction`: FormData -> vanlige verdier, `""` -> ingen frist |
 | 3b | `task-api.ts` -> `task-routes.ts` -> `task-controller.ts` | samme vei med fetch: `POST /api/tasks`, `requireUser`, JSON, 201 + `Location` |
 | 4 | `task-service.ts` | innlogget? så Zod (formen), så `validateTask` (regelen), eier fra `ctx.user` |
@@ -120,7 +120,7 @@ og create går gjennom alle.
 | 7 | `task-repository.ts` | `insert ... returning`, feil blir et Result |
 | 8 | `src/db/schema/task-schema.ts` | tabellen, `CreateTask`-typen, id og `createdAt` lages her |
 | 9 | `task-mapper.ts` | rad -> `TaskDTO`, datoer som ISO, uten `userId` |
-| 10 | `pages/TasksPage.tsx` + `TaskItem.tsx` | rwsdk rendrer på nytt, den ekte oppgaven erstatter den optimistiske |
+| 10 | `pages/TasksPage.tsx` + `TaskItem.tsx` | rwsdk rendrer på nytt, og den nye oppgaven er med i lista |
 
 Testene følger samme tråd: `CreateTaskForm.test.tsx` (1), `task-controller.test.ts`
 (3b), `task-service.test.ts` (4–8 mot SQLite i minnet), `validate-task.test.ts`
@@ -232,8 +232,8 @@ npm run test:e2e
 ## Tregt nett og tilfeldige feil (demo)
 
 I `npm run dev` er serveren med vilje treg, og lagring feiler ca. hver 3. gang.
-Da ser dere skjelettet mens lista lastes, «lagrer…», og at `useOptimistic`
-ruller tilbake. Se `src/lib/demo-chaos.ts`.
+Da ser dere skjelettet mens lista lastes, «lagrer…», og feilmeldingene. Se
+`src/lib/demo-chaos.ts`.
 
 Av i produksjon, og av for forespørsler med headeren `x-demo-chaos: off`.
 Playwright sender den, så e2e-testene er stabile.

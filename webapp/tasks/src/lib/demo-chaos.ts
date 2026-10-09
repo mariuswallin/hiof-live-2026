@@ -4,7 +4,7 @@ import { Errors, type ResultError } from "./result";
  * KUNSTIG TREGHET OG TILFELDIGE FEIL. Bare for demo, bare i dev.
  *
  * Lokalt svarer D1 på et par millisekunder. Da ser vi aldri "lagrer…", aldri
- * skjelettet mens lista lastes, og aldri at useOptimistic ruller tilbake.
+ * skjelettet mens lista lastes, og aldri feilmeldingene.
  * Her later vi som om nettet er tregt, og at serveren feiler av og til.
  *
  *   demoDelay(request, ms)     venter `ms` millisekunder

@@ -130,23 +130,4 @@ describe("CreateTaskForm", () => {
     // Feltfeil, så ingen generell feilmelding i tillegg.
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
-
-  it("kaller onOptimisticCreate med verdiene før serveren svarer", async () => {
-    const user = userEvent.setup();
-    const onOptimisticCreate = vi.fn();
-    render(
-      <CreateTaskForm
-        action={fakeAction(successResponse)}
-        onOptimisticCreate={onOptimisticCreate}
-      />,
-    );
-
-    await user.type(screen.getByLabelText("Ny oppgave"), "Rask");
-    await user.click(screen.getByRole("button", { name: "Legg til" }));
-
-    expect(onOptimisticCreate).toHaveBeenCalledWith({
-      title: "Rask",
-      dueDate: "",
-    });
-  });
 });

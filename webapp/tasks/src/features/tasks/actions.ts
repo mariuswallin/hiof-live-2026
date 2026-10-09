@@ -86,7 +86,7 @@ export async function createTaskAction(
 export async function toggleTaskCompleted(id: string, completed: boolean) {
   const { ctx, request } = requestInfo;
 
-  // Demo: haken flytter seg med én gang, og hopper tilbake når dette feiler.
+  // Demo: "lagrer…" vises en stund, og av og til kommer en feil.
   await demoDelay(request, 1000);
   const chaos = demoFailure(request);
   if (chaos) return { success: false as const, error: chaos.message };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import type { CreateTaskFormState, CreateTaskFormValues } from "../actions";
+import type { CreateTaskFormState } from "../actions";
 
 type CreateTaskAction = (
   prevState: CreateTaskFormState,
@@ -16,9 +16,6 @@ type CreateTaskAction = (
  * server actionen, i testen sender vi inn en falsk (vi.fn). Da kan skjemaet
  * testes uten server. Se __tests__/CreateTaskForm.test.tsx.
  *
- * `onOptimisticCreate` lar TaskList vise oppgaven MED EN GANG, før serveren
- * har svart. Se useOptimistic i TaskList.tsx.
- *
  * useActionState gir tre ting:
  *   state       det action returnerte sist (null før første innsending)
  *   formAction  sendes til <form action>. React kjører den i en transition
@@ -27,24 +24,8 @@ type CreateTaskAction = (
  * Skjemaet er UKONTROLLERT (defaultValue, ikke value + useState). React 19
  * nullstiller skjemaet selv etter en vellykket action.
  */
-export function CreateTaskForm({
-  action,
-  onOptimisticCreate,
-}: {
-  action: CreateTaskAction;
-  onOptimisticCreate?: (values: CreateTaskFormValues) => void;
-}) {
-  const [state, formAction, isPending] = useActionState(
-    async (prevState: CreateTaskFormState, formData: FormData) => {
-      // Vi er inne i en transition her, så det er lov å oppdatere optimistisk.
-      onOptimisticCreate?.({
-        title: String(formData.get("title") ?? ""),
-        dueDate: String(formData.get("dueDate") ?? ""),
-      });
-      return action(prevState, formData);
-    },
-    null,
-  );
+export function CreateTaskForm({ action }: { action: CreateTaskAction }) {
+  const [state, formAction, isPending] = useActionState(action, null);
 
   // `state?.success === false` snevrer typen, så `failed.values` finnes.
   const failed = state?.success === false ? state : null;

@@ -163,7 +163,7 @@ test("frist i fortiden avvises, frist fram i tid lagres", async ({ page }) => {
   await expect(created).toHaveCount(0);
 });
 
-test("vanlig bruker får 403 ved sletting, og oppgaven kommer tilbake", async ({
+test("vanlig bruker får 403 ved sletting, og oppgaven blir stående", async ({
   page,
 }) => {
   await page.context().clearCookies();
@@ -175,7 +175,7 @@ test("vanlig bruker får 403 ved sletting, og oppgaven kommer tilbake", async ({
   await taskItems(page).first().getByRole("button", { name: "Slett" }).click();
 
   await expect(page.getByTestId("delete-error")).toContainText("FORBIDDEN");
-  // useOptimistic ruller tilbake av seg selv.
+  // Serveren sa nei, så lista er uendret.
   await expect(taskItems(page)).toHaveCount(count);
 });
 

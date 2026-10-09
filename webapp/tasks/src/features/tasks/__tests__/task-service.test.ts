@@ -10,7 +10,7 @@
 //
 // Kjører i Node (standard i vitest.config.ts). Ingen server, ingen worker,
 // og hele fila tar millisekunder.
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import {
@@ -157,10 +157,14 @@ describe("taskService.create", () => {
   it("gir INTERNAL_SERVER_ERROR når eieren ikke finnes", async () => {
     // Fremmednøkkelen slår til i databasen. Repositoryet fanger feilen og
     // gjør den om til et Result i stedet for å kaste.
+    // executeDbOperation logger feilen med console.error. Her er feilen
+    // forventet, så vi demper loggen i stedet for å fylle terminalen.
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const result = await service.create(
       { ...bruker, id: 999 },
       { title: "Uten eier" },
     );
+    consoleError.mockRestore();
 
     expect(result).toMatchObject({
       success: false,

@@ -13,8 +13,8 @@ import type { Params } from "../utils/parse-params";
  * valgt. Tomme felt sendes som `?q=&completed=`, og betyr "ikke satt" (se
  * validate-list-params.ts).
  *
- * TANKE: Velg "Ferdig" og lag en ny oppgave. Den dukker opp og forsvinner
- * igjen. Hvorfor? (Hint: useOptimistic i TaskList, og WHERE i findMany.)
+ * TANKE: Velg "Ferdig" og lag en ny oppgave. Hvorfor dukker den ikke opp i
+ * lista? (Hint: WHERE i findMany.)
  */
 export function TaskFilter({ params }: { params: Params }) {
   return (
