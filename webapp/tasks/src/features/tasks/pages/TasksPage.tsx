@@ -4,6 +4,7 @@ import { service } from "../task-service";
 import { demoDelay } from "@/lib/demo-chaos";
 import { TaskList } from "../components/TaskList";
 import { Suspense } from "react";
+import { TaskFilter } from "../components/TaskFilter";
 
 export async function TasksPage() {
   const { ctx, request } = requestInfo;
@@ -13,6 +14,7 @@ export async function TasksPage() {
   return (
     <main className="mx-auto max-w-2xl p-8 font-sans">
       <h1 className="text-3xl font-bold">Oppgaver</h1>
+      <TaskFilter params={params} />
       <Suspense fallback={<TaskListSkeleton />}>
         <Tasks params={params} />
       </Suspense>

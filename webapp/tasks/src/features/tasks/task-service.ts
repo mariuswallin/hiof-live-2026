@@ -10,6 +10,7 @@ import { createTaskSchema } from "./task-schema";
 import type { Params } from "./utils/parse-params";
 import { validateListParams } from "./utils/validate-list-params";
 import { validateTask } from "./utils/validate-task";
+import type { Task } from "@/db/schema";
 
 export interface TaskService {
   create(input: unknown): Promise<
@@ -41,11 +42,26 @@ export interface TaskService {
         };
       }
   >;
-  remove(id: string): Promise<void>;
+  remove(id: string): Promise<
+    | {
+        ok: true;
+        data: void;
+      }
+    | {
+        ok: false;
+        error: {
+          code: string;
+          message: string;
+          fieldErrors?: Record<string, string[]>;
+        };
+      }
+  >;
   update(id: string, input: unknown): Promise<TaskDTO | null>;
 }
 
 export function createTaskService(_repository: TaskRepository): TaskService {
+  const findTask = (id: string) => _repository.findById(id);
+
   return {
     async list(params = {}) {
       const paramsValidationResult = validateListParams(params);
@@ -109,11 +125,26 @@ export function createTaskService(_repository: TaskRepository): TaskService {
     },
     async findById(id) {
       const data = await _repository.findById(id);
-      return null;
+      return data;
     },
     async remove(id) {
-      const data = await _repository.remove(id);
-      return null;
+      const taskExist = await findTask(id);
+
+      if (!taskExist) {
+        return {
+          ok: false,
+          error: {
+            code: "404",
+            message: "Task finnes ikke",
+          },
+        };
+      }
+
+      await _repository.remove(id);
+
+      return {
+        ok: true,
+      };
     },
     async update(id, input) {
       const data = await _repository.update(id, input);

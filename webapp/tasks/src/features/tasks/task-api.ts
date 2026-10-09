@@ -3,6 +3,23 @@
 
 import type { TaskDTO } from "./task-mapper";
 
+type ResultError = {
+  code: string;
+  message: string;
+  fieldErrors?: Record<string, string[]>;
+};
+
+type CreateTaskResult =
+  | { ok: true; data: TaskDTO }
+  | {
+      ok: false;
+      error: {
+        code: string;
+        message: string;
+        fieldErrors: Record<string, string[]>;
+      };
+    };
+
 export async function listTasks(params: Record<string, string> = {}) {
   const query = new URLSearchParams(params ?? {}).toString();
   try {
@@ -27,15 +44,11 @@ export async function listTasks(params: Record<string, string> = {}) {
         message:
           "Fikk ikke kontakt med serveren eller noe er feil med spørringen",
       },
-    } as {
-      ok: false;
-      error: {
-        code: string;
-        message: string;
-      };
-    };
+    } as { ok: boolean; error: ResultError };
   }
 }
+
+// await createTask({ id: 1, title: "test" });
 
 export async function createTask(data: {
   title: string;
@@ -65,15 +78,39 @@ export async function createTask(data: {
   }
 }
 
-type CreateTaskResult =
-  | { ok: true; data: TaskDTO }
-  | {
-      ok: false;
-      error: {
-        code: string;
-        message: string;
-        fieldErrors: Record<string, string[]>;
-      };
-    };
+export async function removeTask(id: string) {
+  try {
+    const response = await fetch(`/api/v1/tasks/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
 
-// await createTask({ id: 1, title: "test" });
+    console.log(response.ok, response.status, response.statusText);
+
+    if (response.ok) {
+      return {
+        ok: true,
+        data: {
+          id,
+        },
+      };
+    }
+
+    const body = (await response.json()) as { error: ResultError };
+
+    return {
+      ok: false,
+      error: body.error,
+    };
+  } catch (error) {
+    console.error(error);
+
+    return {
+      ok: false,
+      error: {
+        code: "500",
+        message:
+          "Fikk ikke kontakt med serveren eller noe er feil med spørringen",
+      },
+    } as { ok: boolean; error: ResultError };
+  }
+}

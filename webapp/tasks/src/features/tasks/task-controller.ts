@@ -3,6 +3,7 @@
 import type { RequestInfo } from "rwsdk/worker";
 import { type TaskService, service } from "./task-service";
 import { parseParams } from "./utils/parse-params";
+import { demoDelay, demoFailure } from "@/lib/demo-chaos";
 
 export interface TaskController {
   create(requestInfo: RequestInfo): Promise<Response>;
@@ -57,9 +58,27 @@ export function createTaskController(_service: TaskService): TaskController {
       const data = await _service.find();
       return null;
     },
-    async remove({ request, ctx }: RequestInfo) {
-      const data = await _service.remove();
-      return null;
+
+    async remove({ request, params, ctx }: RequestInfo) {
+      await demoDelay(request, 1000);
+      const chaos = demoFailure(request);
+
+      if (chaos) {
+        return {
+          ok: false,
+          error: chaos,
+        };
+      }
+
+      const result = await _service.remove(params.id);
+
+      return result.ok
+        ? new Response(null, {
+            status: 204,
+          })
+        : Response.json(result, {
+            status: Number(result.error.code),
+          });
     },
     async update({ request, ctx }: RequestInfo) {
       const data = await _service.update();

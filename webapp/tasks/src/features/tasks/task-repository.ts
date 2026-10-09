@@ -9,6 +9,7 @@ import {
   type UpdateTask,
 } from "@/db/schema";
 import type { TaksListParams } from "./utils/validate-list-params";
+import { eq } from "drizzle-orm";
 
 export interface TaskRepository {
   create(data: CreateTask): Promise<
@@ -98,11 +99,23 @@ export function createTaskRepository(_db: DB): TaskRepository {
         };
       }
     },
-    async findById() {
-      return null;
+    async findById(id) {
+      const task = await db.select().from(tasks).where(eq(tasks.id, id)).get();
+      return task ?? null;
     },
-    async remove() {
-      return null;
+    async remove(id) {
+      try {
+        await db.delete(tasks).where(eq(tasks.id, id));
+
+        return {
+          ok: true,
+        };
+      } catch (error) {
+        console.log(error);
+        return {
+          ok: false,
+        };
+      }
     },
     async update() {
       return null;

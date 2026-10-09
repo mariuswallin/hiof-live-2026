@@ -1,13 +1,26 @@
 "use client";
 
+import { navigate } from "rwsdk/client";
 import { createTaskAction } from "../actions";
+import { removeTask } from "../task-api";
 import type { TaskDTO } from "../task-mapper";
 import { CreateTaskForm } from "./CreateTaskForm";
 import { TaskItem } from "./TaskItem";
 
 export function TaskList({ tasks }: { tasks: TaskDTO[] }) {
-  function onDelete(id: string) {
-    console.log("Deleted", id);
+  // Midlertidig state for å håndtere om sletting går feil
+
+  async function onDelete(id: string) {
+    const result = await removeTask(id);
+    if (!result.ok) {
+      // Oppdatere lokal state med errormeldingen
+      return;
+    }
+
+    await navigate(window.location.pathname, {
+      history: "replace",
+      info: { scrollToTop: false },
+    });
   }
 
   return (
