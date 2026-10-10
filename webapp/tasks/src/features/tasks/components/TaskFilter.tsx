@@ -1,5 +1,6 @@
 import type { Params } from "../utils/parse-params";
 
+// ?completed=true&q=test
 export function TaskFilter({ params }: { params: Params }) {
   return (
     <form

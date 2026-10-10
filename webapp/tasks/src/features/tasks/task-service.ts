@@ -6,11 +6,10 @@
 import z from "zod";
 import { toTaskDTO, type TaskDTO } from "./task-mapper";
 import { type TaskRepository, repository } from "./task-repository";
-import { createTaskSchema } from "./task-schema";
+import { createTaskSchema, updateTaskSchema } from "./task-schema";
 import type { Params } from "./utils/parse-params";
 import { validateListParams } from "./utils/validate-list-params";
 import { validateTask } from "./utils/validate-task";
-import type { Task } from "@/db/schema";
 
 export interface TaskService {
   create(input: unknown): Promise<
@@ -27,7 +26,20 @@ export interface TaskService {
         };
       }
   >;
-  findById(id: string): Promise<TaskDTO | null>;
+  findById(id: string): Promise<
+    | {
+        ok: true;
+        data: TaskDTO;
+      }
+    | {
+        ok: false;
+        error: {
+          code: string;
+          message: string;
+          fieldErrors: Record<string, string[]>;
+        };
+      }
+  >;
   list(params?: Params): Promise<
     | {
         ok: true;
@@ -45,18 +57,33 @@ export interface TaskService {
   remove(id: string): Promise<
     | {
         ok: true;
-        data: void;
       }
     | {
         ok: false;
         error: {
           code: string;
           message: string;
-          fieldErrors?: Record<string, string[]>;
+          fieldErrors: Record<string, string[]>;
         };
       }
   >;
-  update(id: string, input: unknown): Promise<TaskDTO | null>;
+  update(
+    id: string,
+    input: unknown,
+  ): Promise<
+    | {
+        ok: true;
+        data: TaskDTO;
+      }
+    | {
+        ok: false;
+        error: {
+          code: string;
+          message: string;
+          fieldErrors: Record<string, string[]>;
+        };
+      }
+  >;
 }
 
 export function createTaskService(_repository: TaskRepository): TaskService {
@@ -124,31 +151,108 @@ export function createTaskService(_repository: TaskRepository): TaskService {
       };
     },
     async findById(id) {
-      const data = await _repository.findById(id);
-      return data;
-    },
-    async remove(id) {
-      const taskExist = await findTask(id);
+      const result = await _repository.findById(id);
 
-      if (!taskExist) {
+      if (!result.ok) return result;
+
+      if (!result.data) {
         return {
           ok: false,
           error: {
             code: "404",
             message: "Task finnes ikke",
+            fieldErrors: {},
           },
         };
       }
 
-      await _repository.remove(id);
+      return {
+        ok: true,
+        data: toTaskDTO(result.data),
+      };
+    },
+    async remove(id) {
+      const taskExist = await findTask(id);
+
+      if (!taskExist.ok) return taskExist;
+      if (!taskExist.data) {
+        return {
+          ok: false,
+          error: {
+            code: "404",
+            message: "Task finnes ikke",
+            fieldErrors: {},
+          },
+        };
+      }
+
+      const result = await _repository.remove(id);
+      if (!result.ok) return result;
 
       return {
         ok: true,
       };
     },
     async update(id, input) {
-      const data = await _repository.update(id, input);
-      return null;
+      // 1. Alle felt er valgfrie (partial), så { completed: true }
+      // holder. Zod fjerner felt den ikke kjenner, som id og userId.
+      const parsed = updateTaskSchema.safeParse(input);
+      if (!parsed.success)
+        return {
+          ok: false,
+          error: {
+            code: "400",
+            message: "Feil med data",
+            fieldErrors: z.flattenError(parsed.error).fieldErrors,
+          },
+        };
+
+      // 2. Ingen felt å endre, for eksempel en tom body {}.
+      if (Object.keys(parsed.data).length === 0) {
+        return {
+          ok: false,
+          error: {
+            code: "400",
+            message: "Ingen felt å oppdatere",
+            fieldErrors: {},
+          },
+        };
+      }
+
+      // 3. Samme regler som create. validateTask sjekker bare feltene som er med.
+      const rule = validateTask(parsed.data);
+
+      if (!rule.ok) {
+        return {
+          ok: false,
+          error: {
+            code: "400",
+            message: "Ikke gyldig data",
+            fieldErrors: { [rule.field]: [rule.error] },
+          },
+        };
+      }
+
+      // 4. Lagre. Feiler databasen (500), sender vi feilen rett videre.
+      const result = await _repository.update(id, parsed.data);
+      if (!result.ok) return result;
+
+      // 5. Ingen rad ble endret, altså finnes ikke oppgaven.
+      if (!result.data) {
+        return {
+          ok: false,
+          error: {
+            code: "404",
+            message: "Task finnes ikke",
+            fieldErrors: {},
+          },
+        };
+      }
+
+      return {
+        ok: true,
+        data: toTaskDTO(result.data),
+      };
     },
   };
 }

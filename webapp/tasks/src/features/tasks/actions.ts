@@ -2,7 +2,7 @@
 
 import type { TaskDTO } from "./task-mapper";
 import { requestInfo } from "rwsdk/worker";
-import { demoDelay } from "@/lib/demo-chaos";
+import { demoDelay, demoFailure } from "@/lib/demo-chaos";
 import { service } from "./task-service";
 
 export type CreateTaskFormValues = { title: string; dueDate: string };
@@ -52,5 +52,26 @@ export async function createTaskAction(
         ok: false,
         error: result.error,
         values,
+      };
+}
+
+export async function toggleTaskCompleted(id: string, completed: boolean) {
+  const { ctx, request } = requestInfo;
+
+  await demoDelay(request, 1000);
+  const chaos = demoFailure(request);
+
+  if (chaos) return { ok: false as const, error: chaos.message };
+
+  const result = await service.update(id, { completed });
+
+  return result.ok
+    ? {
+        ok: true as const,
+        data: result.data,
+      }
+    : {
+        ok: false as const,
+        error: result.error.message,
       };
 }

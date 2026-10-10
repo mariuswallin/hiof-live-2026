@@ -14,7 +14,7 @@ export const taskRoutes = [
   }),
   route("/api/v1/tasks/:id", {
     get: controller.find,
-    put: [
+    patch: [
       // requireUser,
       controller.update,
     ],
