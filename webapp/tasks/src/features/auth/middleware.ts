@@ -1,10 +1,11 @@
+import { env } from "cloudflare:workers";
 import type { RouteMiddleware } from "rwsdk/router";
-import type { SessionUser } from "./auth-types";
-import { getDemoUserFromRequest } from "./demo-user";
 import { createErrorResponse } from "@/lib/response";
+import { isAdmin } from "./role";
+import { readSession } from "./session";
 
 /* =========================================================================
- * MELLOMVARE
+ * MELLOMVARE OG INTERRUPTERS
  *
  * En mellomvare er en funksjon som kjører FØR handleren. Den får hele
  * `requestInfo` (ikke bare ctx), og har to valg:
@@ -16,21 +17,31 @@ import { createErrorResponse } from "@/lib/response";
  * selv. Returnerer du noe annet enn en Response, for eksempel `true` eller
  * `false`, skjer det INGENTING, og alle slipper inn.
  *
- * Flyttet hit fra worker.tsx. worker.tsx skal bare koble sammen; HVORDAN vi
- * finner brukeren er auth-featuren sitt ansvar.
+ * Samme slags funksjon brukes på to måter, og det er HVOR den står som
+ * avgjør:
+ *
+ *   mellomvare    i defineApp([...])           kjører for ALLE forespørsler
+ *                 setUser                      "hvem er du?"
+ *
+ *   interrupter   i route(path, [vakt, side])  kjører for ÉN rute
+ *                 requireUser, requireAdmin,   "får du lov?"
+ *                 requireUserPage
+ *
+ * worker.tsx skal bare koble sammen; HVORDAN vi finner brukeren er
+ * auth-featuren sitt ansvar.
  * ====================================================================== */
 
-/** Ren sjekk, gjenbrukes i mellomvaren, i server actions og i UI-et. */
-export const isAdmin = (user: SessionUser | null) => user?.role === "admin";
-
 /**
- * Finner ut hvem som spør, og legger brukeren på ctx.
+ * Finner ut hvem som spør, og legger brukeren på ctx.  (autentisering)
+ *
+ * Leser cookien `session`, sjekker signaturen og gjør den om til en bruker.
+ * Ingen cookie, eller en cookie noen har tuklet med, gir `null`.
  *
  * Må stå FØR rutene i defineApp, ellers er ctx.user tom når vaktene under
  * skal sjekke den.
  */
-export const setUser: RouteMiddleware = ({ ctx, request }) => {
-  ctx.user = getDemoUserFromRequest(request);
+export const setUser: RouteMiddleware = async ({ ctx, request }) => {
+  ctx.user = await readSession(request, env.SESSION_SECRET);
 };
 
 /**
@@ -42,7 +53,7 @@ export const requireUser: RouteMiddleware = ({ ctx }) => {
   if (!ctx.user) {
     return createErrorResponse({
       code: "UNAUTHORIZED",
-      message: "Du må være innlogget. Prøv: -H 'x-demo-user: admin'",
+      message: "Du må være innlogget. Logg inn på /login",
     });
   }
 };
@@ -68,5 +79,26 @@ export const requireAdmin: RouteMiddleware = ({ ctx }) => {
       code: "FORBIDDEN",
       message: `${ctx.user.email} er ikke admin`,
     });
+  }
+};
+
+/**
+ * Samme sjekk som requireUser, men for SIDER.  302 Found -> /login
+ *
+ * Et API svarer 401 med JSON, og lar klienten bestemme hva som skjer videre.
+ * Et menneske som har klikket på en lenke, skal ikke få JSON i fjeset: det
+ * skal til innloggingssiden.
+ *
+ *   route("/api/tasks", { post: [requireUser, ...] })     401 + JSON
+ *   route("/profile", [requireUserPage, ProfilePage])     302 -> /login
+ *
+ * TANKE: Etter innlogging havner du på /tasks, ikke på siden du prøvde å
+ * åpne. Hvordan ville du husket hvor brukeren var på vei? (Hint:
+ * /login?next=/profile. Og hva må du sjekke før du sender noen videre til en
+ * adresse som kommer fra URL-en?)
+ */
+export const requireUserPage: RouteMiddleware = ({ ctx }) => {
+  if (!ctx.user) {
+    return new Response(null, { status: 302, headers: { Location: "/login" } });
   }
 };

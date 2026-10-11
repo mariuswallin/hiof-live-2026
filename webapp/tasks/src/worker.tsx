@@ -1,11 +1,12 @@
 import { defineApp } from "rwsdk/worker";
-import { render, route } from "rwsdk/router";
+import { layout, render, route } from "rwsdk/router";
+import { AppLayout } from "@/app/AppLayout";
 import { Document } from "@/app/Document";
 import { setCommonHeaders } from "@/app/headers";
 import { Home } from "@/app/pages/Home";
 import { db } from "@/db";
 import type { SessionUser } from "@/features/auth/auth-types";
-import { authRoutes } from "@/features/auth/auth-routes";
+import { authPages, authRoutes } from "@/features/auth/auth-routes";
 import { setUser } from "@/features/auth/middleware";
 import { TasksPage } from "@/features/tasks/pages/TasksPage";
 import { toTaskDTO } from "@/features/tasks/task-mapper";
@@ -29,7 +30,7 @@ export type AppContext = {
  * features/auth, oppgavene i features/tasks:
  *
  *   features/
- *     auth/    hvem er du (setUser), får du lov (requireUser/requireAdmin)
+ *     auth/    logg inn (cookie), hvem er du (setUser), får du lov (vaktene)
  *     tasks/   schema -> repository -> service -> controller -> routes
  *                                              \-> actions (server actions)
  *
@@ -65,7 +66,8 @@ const app = defineApp([
    * som kjenner en id, e-posten til brukeren, og `userId` på hver oppgave.
    *
    * curl -s localhost:5173/api/users/1/tasks
-   * curl -s localhost:5173/api/users/me/tasks -H "x-demo-user: admin"
+   * curl -s localhost:5173/api/users/me/tasks -b admin.txt
+   * (admin.txt lager du ved å logge inn med curl, se auth-routes.ts)
    */
   route("/api/users/:id/tasks", async ({ params, ctx }) => {
     if (params.id === "me" && !ctx.user) {
@@ -103,11 +105,20 @@ const app = defineApp([
     });
   }),
 
-  // Sider. render(Document, [...]) pakker dem i et helt HTML-dokument.
+  // Sider. render(Document, [...]) pakker dem i et helt HTML-dokument, og
+  // layout(AppLayout, [...]) legger menyen og <AuthProvider> rundt hver side.
   //
-  //   http://localhost:5173/        forsiden (med demo-bruker-panelet)
-  //   http://localhost:5173/tasks   opprett, se og slett oppgaver
-  render(Document, [route("/", Home), route("/tasks", TasksPage)]),
+  //   http://localhost:5173/          forsiden
+  //   http://localhost:5173/tasks     opprett, se og slett oppgaver
+  //   http://localhost:5173/login     velg bruker og rolle
+  //   http://localhost:5173/profile   krever innlogging (requireUserPage)
+  render(Document, [
+    layout(AppLayout, [
+      route("/", Home),
+      route("/tasks", TasksPage),
+      ...authPages,
+    ]),
+  ]),
 ]);
 
 export default { fetch: app.fetch };

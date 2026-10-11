@@ -7,34 +7,9 @@
 // endrer React-state ser helt lik ut i nettleseren, men overlever ikke en
 // omlasting.
 import { test, expect, type Page } from "@playwright/test";
+import { logInAs, waitForHydration } from "./helpers";
 
 const taskItems = (page: Page) => page.getByTestId("task");
-
-/**
- * Venter på at klient-koden har tatt over.
- *
- * Ikke `waitForLoadState("networkidle")`. Den venter på at nettverket blir
- * stille, som er noe annet enn at siden er klar, og i dev-modus blir det
- * aldri helt stille (HMR holder en socket åpen). Her venter vi på det vi
- * faktisk trenger: `<html data-hydrated="true">`, som client.tsx setter når
- * React har hydrert siden.
- */
-async function waitForHydration(page: Page) {
-  await expect(page.locator("html")).toHaveAttribute("data-hydrated", "true");
-}
-
-/**
- * Bytter bruker via DemoUserPanel nede i høyre hjørne, som en bruker ville
- * gjort. Knappen setter cookien `demo-user` og henter siden på nytt.
- */
-async function logInAs(page: Page, name: "Admin" | "Bruker") {
-  await page.getByRole("button", { name, exact: true }).click();
-  await expect(page.getByTestId("logged-in-as")).toHaveText(
-    name === "Admin"
-      ? "Innlogget som admin@test.no"
-      : "Innlogget som test@example.com"
-  );
-}
 
 test("server-komponenten viser oppgavene fra databasen", async ({ page }) => {
   await page.goto("/tasks");
@@ -66,11 +41,7 @@ test("uten innlogging avviser server action endringen", async ({ page }) => {
 });
 
 test("server action lagrer avkryssingen i databasen", async ({ page }) => {
-  await page.context().clearCookies();
-  await page.goto("/tasks");
-  await waitForHydration(page);
   await logInAs(page, "Admin");
-  await waitForHydration(page);
 
   const firstTask = taskItems(page).first();
   const checkbox = firstTask.getByRole("checkbox");
@@ -100,9 +71,6 @@ test("server action lagrer avkryssingen i databasen", async ({ page }) => {
 });
 
 test("server action lager en oppgave", async ({ page }) => {
-  await page.context().clearCookies();
-  await page.goto("/tasks");
-  await waitForHydration(page);
   await logInAs(page, "Admin");
 
   const title = `E2E ${Date.now()}`;
@@ -123,9 +91,6 @@ test("server action lager en oppgave", async ({ page }) => {
 });
 
 test("tom tittel gir valideringsfeil fra servicen", async ({ page }) => {
-  await page.context().clearCookies();
-  await page.goto("/tasks");
-  await waitForHydration(page);
   await logInAs(page, "Admin");
 
   await page.getByRole("button", { name: "Legg til" }).click();
@@ -134,9 +99,6 @@ test("tom tittel gir valideringsfeil fra servicen", async ({ page }) => {
 });
 
 test("frist i fortiden avvises, frist fram i tid lagres", async ({ page }) => {
-  await page.context().clearCookies();
-  await page.goto("/tasks");
-  await waitForHydration(page);
   await logInAs(page, "Admin");
 
   const title = `E2E frist ${Date.now()}`;
@@ -163,26 +125,43 @@ test("frist i fortiden avvises, frist fram i tid lagres", async ({ page }) => {
   await expect(created).toHaveCount(0);
 });
 
-test("vanlig bruker får 403 ved sletting, og oppgaven blir stående", async ({
+test("uten innlogging vises en lenke til /login i stedet for skjemaet", async ({
   page,
 }) => {
-  await page.context().clearCookies();
   await page.goto("/tasks");
-  await waitForHydration(page);
+
+  await expect(page.getByTestId("login-to-create")).toBeVisible();
+  await expect(page.getByLabel("Ny oppgave")).toHaveCount(0);
+});
+
+test("vanlig bruker ser ingen slett-knapp, og API-et svarer 403 uansett", async ({
+  page,
+}) => {
   await logInAs(page, "Bruker");
 
-  const count = await taskItems(page).count();
-  await taskItems(page).first().getByRole("button", { name: "Slett" }).click();
+  // UI-et: useAuth() sier at vi ikke er admin, så TaskItem tegner ikke knappen.
+  await expect(taskItems(page).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Slett" })).toHaveCount(0);
 
-  await expect(page.getByTestId("delete-error")).toContainText("FORBIDDEN");
+  // Men en skjult knapp er ikke en vakt. Vi kaller ruta direkte, med samme
+  // cookie som nettleseren har (`page.request` deler cookies med siden).
+  const count = await taskItems(page).count();
+  const list = await page.request.get("/api/tasks");
+  const { data } = (await list.json()) as { data: { id: string }[] };
+
+  const response = await page.request.delete(`/api/tasks/${data[0].id}`);
+
+  expect(response.status()).toBe(403);
+  expect(await response.json()).toMatchObject({
+    error: { code: "FORBIDDEN" },
+  });
+
   // Serveren sa nei, så lista er uendret.
+  await page.reload();
   await expect(taskItems(page)).toHaveCount(count);
 });
 
 test("admin sletter via DELETE /api/tasks/:id", async ({ page }) => {
-  await page.context().clearCookies();
-  await page.goto("/tasks");
-  await waitForHydration(page);
   await logInAs(page, "Admin");
 
   const title = `Slett ${Date.now()}`;

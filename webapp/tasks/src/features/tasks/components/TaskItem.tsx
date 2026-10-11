@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useAuth } from "@/features/auth/components/AuthProvider";
 import type { TaskDTO } from "../task-mapper";
 import { toggleTaskCompleted } from "../actions";
 
@@ -17,6 +18,15 @@ import { toggleTaskCompleted } from "../actions";
  *
  * useTransition gir `isPending`, som er true helt til serveren har svart OG
  * siden er rendret på nytt.
+ *
+ * Slett-knappen vises bare for admin. `useAuth()` henter brukeren fra context,
+ * så verken TasksPage eller TaskList trenger å sende den ned hit som prop.
+ *
+ * TANKE: Bytt `isAdmin &&` med `true &&` og trykk "Slett" som vanlig bruker.
+ * Serveren svarer 403, og oppgaven blir stående. Knappen var aldri vakten.
+ *
+ * TANKE: Avkryssingsboksen er IKKE skjult for uinnloggede. Prøv den: servicen
+ * svarer "Du må være innlogget". Burde UI-et stoppet deg først?
  */
 export function TaskItem({
   task,
@@ -27,6 +37,7 @@ export function TaskItem({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { isAdmin } = useAuth();
 
   const toggle = () => {
     setError(null);
@@ -71,14 +82,16 @@ export function TaskItem({
           {isPending ? "lagrer…" : task.completed ? "ferdig" : "ikke ferdig"}
         </span>
 
-        <button
-          type="button"
-          disabled={isPending}
-          onClick={remove}
-          className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
-        >
-          Slett
-        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={remove}
+            className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            Slett
+          </button>
+        )}
       </div>
 
       {error && (

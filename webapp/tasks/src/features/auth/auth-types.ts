@@ -5,9 +5,9 @@
  * forretningsregel gjemt i en streng. En egen rolle gjør regelen synlig, og
  * TypeScript sier fra hvis noen skriver "Admin" med stor A.
  *
- * TANKE: I en ekte app ligger rollen i databasen (users.role), ikke i koden.
- * Hvordan ville dere lagt den til? Migrasjon, seed, og så leser setUser den
- * derfra i stedet for å slå opp i DEMO_USERS.
+ * TANKE: I en ekte app ligger rollen i databasen (users.role), ikke i en
+ * cookie. Hvordan ville dere lagt den til? Migrasjon, seed, og så leser
+ * setUser den derfra i stedet for å stole på det som står i sesjonen.
  */
 export type Role = "user" | "admin";
 

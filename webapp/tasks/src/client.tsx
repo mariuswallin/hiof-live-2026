@@ -1,8 +1,8 @@
 import { initClient, initClientNavigation } from "rwsdk/client";
 
 // Klientnavigasjon: interne lenker og `navigate()` henter bare
-// server-komponentene på nytt, i stedet for å laste hele siden. TaskList og
-// DemoUserPanel bruker `navigate()` for å hente ferske data fra serveren.
+// server-komponentene på nytt, i stedet for å laste hele siden. TaskList
+// bruker `navigate()` for å hente ferske data fra serveren.
 const { handleResponse, onHydrated } = initClientNavigation();
 
 initClient({

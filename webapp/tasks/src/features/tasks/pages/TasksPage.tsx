@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { requestInfo } from "rwsdk/worker";
 import { demoDelay } from "@/lib/demo-chaos";
-import { DemoUserPanel } from "@/features/auth/components/DemoUserPanel";
 import { taskService } from "../task-service";
 import { TaskFilter } from "../components/TaskFilter";
 import { TaskList } from "../components/TaskList";
@@ -23,7 +22,7 @@ import { parseParams, type Params } from "../utils/parse-params";
  * akkurat der: server henter, klient klikker.
  *
  * Selve hentingen ligger i <Tasks> under, inne i <Suspense>. Da sendes
- * overskriften og panelet til nettleseren MED EN GANG, med skjelettet der
+ * overskriften og filteret til nettleseren MED EN GANG, med skjelettet der
  * lista skal stå. Når <Tasks> er ferdig, strømmes lista inn i samme svar.
  *
  * Query-parametrene leses her, ÉN gang, og går både til filteret (så feltene
@@ -33,7 +32,7 @@ import { parseParams, type Params } from "../utils/parse-params";
  *   parseParams  ->  { completed: "false", q: "oblig" }
  */
 export function TasksPage() {
-  const { ctx, request } = requestInfo;
+  const { request } = requestInfo;
   const params = parseParams(request);
 
   return (
@@ -53,8 +52,6 @@ export function TasksPage() {
       <a className="mt-10 inline-block text-sm underline" href="/">
         Til forsiden
       </a>
-
-      <DemoUserPanel user={ctx.user} />
     </main>
   );
 }

@@ -13,7 +13,7 @@ import type { TaskDTO } from "./task-mapper";
  * Fordelen med fetch: ruta er et ekte API. Mobilappen, Thunder Client og curl
  * kan bruke den samme ruta (se task-routes.ts).
  *
- * Cookien `demo-user` sendes med automatisk, fordi kallet går til samme
+ * Cookien `session` sendes med automatisk, fordi kallet går til samme
  * domene (`credentials: "same-origin"` er standard).
  *
  * TANKE: Cookies sendes med AUTOMATISK. Hva betyr det hvis en annen nettside

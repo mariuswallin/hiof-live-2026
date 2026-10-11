@@ -8,5 +8,9 @@
 #   openssl rand -hex 32
 #   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
+# Signerer sesjons-cookien (src/features/auth/sign.ts). Bytt verdien: den som
+# kjenner den, kan lage sin egen cookie og logge inn som hvem som helst.
+SESSION_SECRET="bytt-meg-til-en-lang-tilfeldig-streng"
+
 # BETTER_AUTH_SECRET=""
 # BETTER_AUTH_URL="http://localhost:5173"

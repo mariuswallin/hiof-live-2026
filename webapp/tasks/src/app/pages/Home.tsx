@@ -1,7 +1,6 @@
 import { requestInfo } from "rwsdk/worker";
 import { Counter } from "@/components/Counter";
 import { TimeClient } from "@/components/TimeClient";
-import { DemoUserPanel } from "@/features/auth/components/DemoUserPanel";
 import { taskService } from "@/features/tasks/task-service";
 
 /**
@@ -59,9 +58,6 @@ export async function Home() {
         </li>
         <li>Trykk på knappen over. Den er en klient-komponent.</li>
       </ul>
-
-      {/* Fast nede i høyre hjørne. Bytt bruker uten DevTools. */}
-      <DemoUserPanel user={ctx.user} />
     </main>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { navigate } from "rwsdk/client";
+import { useAuth } from "@/features/auth/components/AuthProvider";
 import { createTaskAction } from "../actions";
 import type { TaskDTO } from "../task-mapper";
 import { deleteTask } from "../task-api";
@@ -23,13 +24,18 @@ import { TaskItem } from "./TaskItem";
  *            fetch vet ingenting om React, så vi må selv be om ferske data:
  *            navigate() til samme side henter server-komponentene på nytt
  *
- * TANKE: Slett-knappen vises for alle, også for vanlige brukere. Prøv som
- * "bruker": serveren svarer 403, og oppgaven blir stående. Burde knappen vært
- * skjult for ikke-admin? (Ja, for brukeren. Men sikkerheten ligger uansett i
- * requireAdmin på serveren, ikke i at knappen er borte.)
+ * UI-et følger innloggingen, via useAuth():
+ *
+ *   ikke innlogget   ser lista, og en lenke til /login i stedet for skjemaet
+ *   innlogget        ser skjemaet
+ *   admin            ser i tillegg "Slett" (se TaskItem.tsx)
+ *
+ * Det er for BRUKEREN, så ingen møter et skjema som bare gir feil. Sikkerheten
+ * ligger i servicen, som sier nei uansett hva som vises her.
  */
 export function TaskList({ tasks }: { tasks: TaskDTO[] }) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { isAuthenticated } = useAuth();
 
   const handleDelete = async (id: string) => {
     setDeleteError(null);
@@ -52,7 +58,16 @@ export function TaskList({ tasks }: { tasks: TaskDTO[] }) {
 
   return (
     <section>
-      <CreateTaskForm action={createTaskAction} />
+      {isAuthenticated ? (
+        <CreateTaskForm action={createTaskAction} />
+      ) : (
+        <p className="mt-6 text-slate-600" data-testid="login-to-create">
+          <a className="underline" href="/login">
+            Logg inn
+          </a>{" "}
+          for å lage oppgaver.
+        </p>
+      )}
 
       {deleteError && (
         <p

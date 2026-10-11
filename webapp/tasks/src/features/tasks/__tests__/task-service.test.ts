@@ -20,14 +20,15 @@ import {
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { relations } from "@/db/relations";
 import { tasks, users } from "@/db/schema";
-import { DEMO_USERS } from "@/features/auth/demo-user";
+import { toSessionUser } from "@/features/auth/demo-users";
 import type { Result } from "@/lib/result";
 import { createTaskRepository } from "../task-repository";
 import { createTaskService, type TaskService } from "../task-service";
 
-// Samme brukere som appen. Begge har id 1, som vi legger inn i beforeEach.
-const admin = DEMO_USERS.admin;
-const bruker = DEMO_USERS.bruker;
+// Samme bruker som appen, i to roller. Kari har id 1, som vi legger inn i
+// beforeEach.
+const admin = toSessionUser("kari", "admin");
+const bruker = toSessionUser("kari", "user");
 
 let db: BetterSQLite3Database<typeof relations>;
 let service: TaskService;

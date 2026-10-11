@@ -19,20 +19,26 @@ import { taskController } from "./task-controller";
  * sier nei uansett. Fjerner du `requireAdmin` under, får du fortsatt 403.
  * Prøv det. (Se "HVOR BOR AUTH-SJEKKEN?" i task-service.ts.)
  *
- * curl-eksempler (én linje, kan limes rett inn). Sett $ID først:
+ * curl-eksempler (én linje, kan limes rett inn). Logg inn først, så curl har
+ * en cookie å sende: `-c` lagrer den i en fil, `-b` sender den med.
+ *   curl -s -o /dev/null -c admin.txt -d "user=kari&admin=on" localhost:5173/login
+ *   curl -s -o /dev/null -c bruker.txt -d "user=ola" localhost:5173/login
+ *
+ * Sett $ID:
  *   ID=$(curl -s localhost:5173/api/tasks | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
  *
  *   curl -s localhost:5173/api/tasks
  *   curl -s "localhost:5173/api/tasks?completed=false&q=oblig&limit=5"
  *   curl -i "localhost:5173/api/tasks?limit=tull"   (400, validateListParams)
  *   curl -i localhost:5173/api/tasks/finnesikke
- *   curl -i -X POST localhost:5173/api/tasks -H "content-type: application/json" -H "x-demo-user: admin" -d '{"title":"Skrive obligen"}'
- *   curl -i -X POST localhost:5173/api/tasks -H "content-type: application/json" -H "x-demo-user: admin" -d '{"title":""}'
- *   curl -i -X POST localhost:5173/api/tasks -H "content-type: application/json" -H "x-demo-user: admin" -d '{"title":"Med frist","dueDate":"2000-01-01"}'   (400, validateTask)
- *   curl -i -X PUT localhost:5173/api/tasks/$ID -H "content-type: application/json" -H "x-demo-user: admin" -d '{"title":"Nytt navn","completed":true}'
- *   curl -i -X POST localhost:5173/api/tasks/$ID/complete -H "x-demo-user: admin"
- *   curl -i -X DELETE localhost:5173/api/tasks/$ID -H "x-demo-user: bruker"   (403)
- *   curl -i -X DELETE localhost:5173/api/tasks/$ID -H "x-demo-user: admin"    (204)
+ *   curl -i -X POST localhost:5173/api/tasks -H "content-type: application/json" -d '{"title":"Skrive obligen"}'   (401, ingen cookie)
+ *   curl -i -X POST localhost:5173/api/tasks -b admin.txt -H "content-type: application/json" -d '{"title":"Skrive obligen"}'
+ *   curl -i -X POST localhost:5173/api/tasks -b admin.txt -H "content-type: application/json" -d '{"title":""}'
+ *   curl -i -X POST localhost:5173/api/tasks -b admin.txt -H "content-type: application/json" -d '{"title":"Med frist","dueDate":"2000-01-01"}'   (400, validateTask)
+ *   curl -i -X PUT localhost:5173/api/tasks/$ID -b admin.txt -H "content-type: application/json" -d '{"title":"Nytt navn","completed":true}'
+ *   curl -i -X POST localhost:5173/api/tasks/$ID/complete -b admin.txt
+ *   curl -i -X DELETE localhost:5173/api/tasks/$ID -b bruker.txt   (403)
+ *   curl -i -X DELETE localhost:5173/api/tasks/$ID -b admin.txt    (204)
  *
  * Thunder Client: se DELETE nederst.
  */
@@ -59,24 +65,26 @@ export const taskRoutes = [
      *
      *   2. Ny request:   DELETE  http://localhost:5173/api/tasks/<id>
      *
-     *   3. Headers (velg ÉN):
-     *        x-demo-user   admin               <- enklest
-     *        Cookie        demo-user=admin     <- samme som nettleseren sender
+     *   3. Header:       Cookie   session=<verdi>
+     *                    Logg inn på /login i nettleseren, og kopier verdien
+     *                    fra DevTools -> Application -> Cookies -> session.
+     *                    Hele verdien, også signaturen etter punktumet.
      *
      *   4. Body:         ingen
      *
      *   Forventet svar:
-     *     ingen header            401  { success: false, error: { code: "UNAUTHORIZED", ... } }
-     *     x-demo-user: bruker     403  { success: false, error: { code: "FORBIDDEN", ... } }
-     *     x-demo-user: admin      204  (tom body)
+     *     ingen cookie            401  { success: false, error: { code: "UNAUTHORIZED", ... } }
+     *     innlogget som bruker    403  { success: false, error: { code: "FORBIDDEN", ... } }
+     *     innlogget som admin     204  (tom body)
      *     samme id én gang til    404  { success: false, error: { code: "NOT_FOUND", ... } }
      *
      *   I `npm run dev` er DELETE treg med vilje, og omtrent hver tredje gir
      *   500 (src/lib/demo-chaos.ts). Headeren `x-demo-chaos: off` skrur det av.
      * ---------------------------------------------------------------------
      *
-     * TANKE: Thunder Client kan sette hvilken som helst header. Hva sier det
-     * om hvor mye vi kan stole på `x-demo-user` og cookien?
+     * TANKE: Thunder Client kan sette hvilken som helst header. Kopier
+     * cookien til en vanlig bruker, og bytt "user" med "admin" i verdien.
+     * Hvorfor svarer serveren 401, og ikke 204? (Se sign.ts.)
      */
     delete: [requireAdmin, taskController.remove],
   }),

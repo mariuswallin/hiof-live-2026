@@ -9,13 +9,13 @@
 // kommer UT. Om reglene stemmer, er servicetestens jobb.
 import { describe, expect, it, vi } from "vitest";
 import type { RequestInfo } from "rwsdk/worker";
-import { DEMO_USERS } from "@/features/auth/demo-user";
+import { toSessionUser } from "@/features/auth/demo-users";
 import { ResultHandler } from "@/lib/result";
 import { createTaskController } from "../task-controller";
 import type { TaskDTO } from "../task-mapper";
 import type { TaskService } from "../task-service";
 
-const bruker = DEMO_USERS.bruker;
+const bruker = toSessionUser("kari", "user");
 
 const task: TaskDTO = {
   id: "abc",

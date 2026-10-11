@@ -6,6 +6,7 @@
 // startet. Da slipper dere å lure på om feilen ligger i dataene.
 import { defineScript } from "rwsdk/worker";
 import { drizzle } from "drizzle-orm/d1";
+import { DEMO_USERS } from "@/features/auth/demo-users";
 import { users, tasks } from "./schema";
 
 export const seedData = async (env: Env) => {
@@ -20,16 +21,19 @@ export const seedData = async (env: Env) => {
   // Eksplisitt id, ikke autoincrement. Uten den klatrer id-en for hver gang
   // seeden kjøres (autoincrement gjenbruker aldri et tall), og da slutter
   // eksemplene i worker.tsx med "userId": 1 å virke.
-  const [user] = await db
-    .insert(users)
-    .values({ id: 1, name: "Test Testesen", email: "test@example.com" })
-    .returning();
+  //
+  // Samme liste som /login viser. Den du logger inn som, MÅ finnes her, ellers
+  // nekter fremmednøkkelen deg å lage oppgaver.
+  await db.insert(users).values(Object.values(DEMO_USERS));
+
+  // Begge oppgavene er Kari sine.
+  const owner = DEMO_USERS.kari;
 
   await db.insert(tasks).values([
     {
       title: "Lese leksjonen før timen",
       completed: true,
-      userId: user.id,
+      userId: owner.id,
       dueDate: new Date(Date.now() - 86_400_000),
       // Ett minutt eldre enn den neste. createdAt lagres i hele sekunder, så
       // uten dette får begge samme tid, og rekkefølgen i lista blir tilfeldig.
@@ -38,7 +42,7 @@ export const seedData = async (env: Env) => {
     {
       title: "Sette opp prosjektet",
       completed: false,
-      userId: user.id,
+      userId: owner.id,
       dueDate: new Date(Date.now() + 86_400_000),
     },
   ]);

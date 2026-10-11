@@ -39,6 +39,15 @@ npm run migrate:dev    # lager tabellene i den lokale databasen
 npm run seed           # legger inn litt testdata
 ```
 
+Innloggingen trenger en hemmelighet til å signere cookien med:
+
+```bash
+cp .dev.vars.example .dev.vars    # og bytt verdien av SESSION_SECRET
+```
+
+`.dev.vars` er gitignorert, så hemmeligheten havner aldri i git. Start
+dev-serveren på nytt etterpå.
+
 **Velg én lockfil.** Repoet har både `package-lock.json` (npm) og
 `pnpm-lock.yaml` (pnpm), så begge virker rett ut av boksen. Slett den dere ikke
 bruker, så kan de ikke komme i utakt.
@@ -53,6 +62,7 @@ src/
 ├─ client.tsx              starter React i nettleseren
 ├─ app/
 │  ├─ Document.tsx         HTML-skallet rundt alle sider
+│  ├─ AppLayout.tsx        menyen, og <AuthProvider> rundt alle sider
 │  ├─ headers.ts           sikkerhetsheadere, blant annet CSP
 │  ├─ styles.css           én linje: @import "tailwindcss"
 │  └─ pages/Home.tsx       forsiden. En server-komponent
@@ -60,7 +70,18 @@ src/
 │  ├─ Counter.tsx          en klient-komponent ("use client")
 │  └─ __tests__/           komponenttest med Testing Library
 ├─ features/               alt som hører til én funksjon, samlet
-│  ├─ auth/                setUser, requireUser, requireAdmin, DemoUserPanel
+│  ├─ auth/
+│  │  ├─ demo-users.ts       brukerne du kan logge inn som (juks, uten passord)
+│  │  ├─ auth-schema.ts      Zod: hva innloggingsskjemaet får sende
+│  │  ├─ sign.ts             signerer cookie-verdien (HMAC)
+│  │  ├─ session.ts          lager, leser og sletter cookien `session`
+│  │  ├─ auth-controller.ts  POST /login og /logout: Set-Cookie + redirect
+│  │  ├─ auth-routes.ts      /login, /logout, /profile, /api/me
+│  │  ├─ middleware.ts       setUser (hvem er du) og vaktene (får du lov)
+│  │  ├─ role.ts             isAdmin, delt av server og klient
+│  │  ├─ components/AuthProvider.tsx  context + useAuth() for klient-komponenter
+│  │  ├─ pages/              LoginPage, ProfilePage
+│  │  └─ __tests__/          sesjon, vakter og context
 │  └─ tasks/
 │     ├─ task-schema.ts      Zod: hva vi godtar utenfra
 │     ├─ task-repository.ts  interface + factory, eneste som rører databasen
@@ -125,6 +146,42 @@ og create går gjennom alle.
 Testene følger samme tråd: `CreateTaskForm.test.tsx` (1), `task-controller.test.ts`
 (3b), `task-service.test.ts` (4–8 mot SQLite i minnet), `validate-task.test.ts`
 (6), `task-mapper.test.ts` (9) og `e2e/tasks.e2e.ts` (alt sammen).
+
+---
+
+## Rød tråd: logg inn
+
+Følg én innlogging fra skjemaet til en knapp som vises eller skjules.
+Innloggingen er juks (ingen passord, du velger rolle selv), men alt som skjer
+ETTER den er som i en ekte app.
+
+| # | Fil | Hva skjer |
+| --- | --- | --- |
+| 1 | `auth/pages/LoginPage.tsx` | vanlig HTML-skjema: `POST /login` med `user` og `admin` |
+| 2 | `auth/auth-schema.ts` | Zod: bare brukerne i `demo-users.ts` slipper gjennom |
+| 3 | `auth/auth-controller.ts` | svarer `303` med `Set-Cookie`. Serveren setter cookien, ikke nettleseren |
+| 4 | `auth/session.ts` + `sign.ts` | verdien `kari:admin` + signatur. `HttpOnly`, `SameSite=Lax`, `Max-Age` |
+| 5 | `auth/middleware.ts` | `setUser` (mellomvare, alle forespørsler): cookie -> `ctx.user`, eller `null` |
+| 6 | `auth/middleware.ts` | interrupters per rute: `requireUser` (401), `requireAdmin` (403), `requireUserPage` (302 til `/login`) |
+| 7 | `tasks/task-service.ts` | rollen sjekkes HER. Server actions går aldri gjennom interrupters |
+| 8 | `app/AppLayout.tsx` | leser `ctx.user` på serveren, tegner menyen, og sender brukeren til `<AuthProvider>` |
+| 9 | `auth/components/AuthProvider.tsx` | `useAuth()` i `TaskList` og `TaskItem`: skjema og slett-knapp vises eller skjules |
+
+Fire lag, og bare ett av dem er garantien:
+
+| Lag | Spørsmål | Hva det er |
+| --- | --- | --- |
+| `setUser` | hvem er du? | autentisering |
+| interrupter på ruta | får du lov til å komme hit? | tidlig stopp: 401, 403 eller redirect |
+| service | får du lov til å gjøre dette? | autorisasjon, garantien |
+| `useAuth()` i UI-et | skal knappen vises? | brukeropplevelse, ikke sikkerhet |
+
+Se cookien selv: logg inn, og åpne DevTools -> Application -> Cookies. Prøv så
+`document.cookie` i konsollen. Cookien `session` er ikke der, fordi den er
+`HttpOnly`.
+
+Testene: `session.test.ts` (4), `middleware.test.ts` (6),
+`AuthProvider.test.tsx` (9) og `e2e/auth.e2e.ts` (alt sammen i ekte nettleser).
 
 ---
 
@@ -325,6 +382,7 @@ Ellers:
 | Porten er opptatt | Noe annet kjører på 5173. Stopp det, eller kjør `npm run dev -- --port 5174` |
 | `npm run dev` starter ikke etter install | Installasjonen hoppet over byggesteg. Kjør install på nytt, og se etter en advarsel om install-scripts |
 | TypeScript finner ikke `env.DB` | `npm run generate` |
+| «SESSION_SECRET mangler», eller TypeScript finner ikke `env.SESSION_SECRET` | `cp .dev.vars.example .dev.vars`, så `npm run generate`, og start dev-serveren på nytt |
 | «No migrations to apply» | Dere står i feil mappe, eller migrasjonen er ikke laget ennå |
 | Testene klager på `better-sqlite3` | Slett `node_modules`, installer på nytt |
 | Rare feil etter en oppdatering | `npm run clean`, så start dev-serveren på nytt |
