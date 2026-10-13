@@ -9,6 +9,7 @@ import {
   createTaskRepository,
   taskRepository,
 } from "./features/tasks/task-repository";
+import { taskRoutes } from "./features/tasks/task-routes";
 
 /**
  * Alt som ligger på `ctx` for én forespørsel.
@@ -24,6 +25,7 @@ const app = defineApp([
 
   // API-rute. Ligger UTENFOR render(), så svaret er akkurat det handleren
   // returnerer: JSON, uten HTML-skall rundt.
+  ...taskRoutes,
   route("/api/status", () => Response.json({ status: "ok", version: "0.1.0" })),
   route("/api/tasks", async (params) => {
     const headers = Object.fromEntries(params.request.headers.entries());

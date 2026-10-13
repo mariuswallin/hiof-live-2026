@@ -11,6 +11,24 @@ type TaskListProps = {
 };
 
 export function TaskList({ tasks, onRegister, onToggle }: TaskListProps) {
+  // const [query, setQuery] = useState(["na"]);
+  // // const [filtered, setFiltered] = useState(tasks);
+
+  // const filteredData = tasks.filter((t) => t.name.includes(query));
+
+  // // "naf"
+  // // "nafi"
+  // const handleFiltering = (searchValueFromTextBox: string) => {
+  //   // ["na"]
+  //   // ["na", "naf"]
+
+  //   setQuery((prevSearchQuery) => [...prevSearchQuery, searchValueFromTextBox]);
+  //   // ["na", "naf", "nafi"]
+  //   // setFiltered((prev) =>
+  //   //   prev.filter((v) => v.name.includes(searchValueFromTextBox)),
+  //   // );
+  // };
+
   if (tasks.length === 0) {
     return (
       <View>

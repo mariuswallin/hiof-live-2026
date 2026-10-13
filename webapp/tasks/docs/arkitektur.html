@@ -1,0 +1,1899 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasks-arkitekturen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Schibsted+Grotesk:ital,wght@0,400;0,500;0,700;0,800;1,400&display=swap">
+<style>
+/* Layout: smal lesekolonne (72ch) med ett bredt kart i midten; farge = lag, brukt likt overalt */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --canvas: #fafbfc;
+  --ink: #16202c;
+  --muted: #5b6878;
+  --line: #d6dce4;
+  --edge: #7f8a98;
+  --code-bg: #eef1f5;
+  --entry: #4a5869;
+  --recv: #3557d4;
+  --client: #9b37b0;
+  --logic: #b26700;
+  --access: #23864a;
+  --db: #0b7f93;
+  --warn: #a14a00;
+  --sans: "Schibsted Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --entry-t: color-mix(in srgb, var(--entry) 12%, var(--surface));
+  --recv-t: color-mix(in srgb, var(--recv) 12%, var(--surface));
+  --client-t: color-mix(in srgb, var(--client) 12%, var(--surface));
+  --logic-t: color-mix(in srgb, var(--logic) 13%, var(--surface));
+  --access-t: color-mix(in srgb, var(--access) 13%, var(--surface));
+  --db-t: color-mix(in srgb, var(--db) 13%, var(--surface));
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141a; --surface: #161d26; --canvas: #121920; --ink: #e5eaf0; --muted: #98a4b3;
+    --line: #283340; --edge: #6f7c8c; --code-bg: #1c2531;
+    --entry: #a9b6c6; --recv: #8ea4ff; --client: #d68ae8; --logic: #f0a94a; --access: #63c98a; --db: #45c2d6; --warn: #f0a94a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141a; --surface: #161d26; --canvas: #121920; --ink: #e5eaf0; --muted: #98a4b3;
+  --line: #283340; --edge: #6f7c8c; --code-bg: #1c2531;
+  --entry: #a9b6c6; --recv: #8ea4ff; --client: #d68ae8; --logic: #f0a94a; --access: #63c98a; --db: #45c2d6; --warn: #f0a94a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 400 16px/1.6 var(--sans);
+  padding-inline: 20px;
+  padding-block: 0 64px;
+}
+code, pre { font-family: var(--mono); }
+code { font-size: 0.86em; background: var(--code-bg); padding: 0.08em 0.35em; border-radius: 4px; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--recv); outline-offset: 2px; }
+
+.wrap { max-width: 1180px; margin-inline: auto; }
+.read { max-width: 72ch; }
+
+/* layer colours */
+.l-entry { --c: var(--entry); --t: var(--entry-t); }
+.l-recv { --c: var(--recv); --t: var(--recv-t); }
+.l-client { --c: var(--client); --t: var(--client-t); }
+.l-logic { --c: var(--logic); --t: var(--logic-t); }
+.l-access { --c: var(--access); --t: var(--access-t); }
+.l-db { --c: var(--db); --t: var(--db-t); }
+
+/* header */
+header { padding-block: 56px 28px; }
+.eyebrow { font: 500 13px/1.4 var(--mono); color: var(--muted); letter-spacing: 0.01em; }
+h1 { font-size: clamp(2rem, 4.6vw, 3rem); line-height: 1.08; font-weight: 800; letter-spacing: -0.025em; margin: 12px 0 16px; text-wrap: balance; }
+.lead { font-size: 1.15rem; line-height: 1.55; color: var(--ink); margin: 0; }
+.lead code { font-size: 0.82em; }
+
+section { padding-block: 40px 8px; }
+h2 { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.015em; margin: 0 0 8px; text-wrap: balance; }
+h3 { font-size: 1.05rem; font-weight: 700; margin: 0 0 6px; }
+.intro { color: var(--muted); margin: 0 0 24px; }
+.intro code { color: var(--ink); }
+
+/* layer cards */
+.layers { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.layer { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.layer-head { display: flex; align-items: center; gap: 8px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; background: var(--c); flex: none; }
+.layer-name { font-weight: 700; font-size: 1rem; }
+.layer-where { font: 400 12px/1.45 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.layer p { margin: 0; font-size: 14.5px; line-height: 1.5; }
+.layer .like { color: var(--muted); font-style: italic; font-size: 13.5px; padding-block: 4px 6px; }
+
+/* map */
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.flowbtn {
+  font: 600 14px/1 var(--sans); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 999px; padding: 10px 14px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.flowbtn small { font: 400 12px/1 var(--mono); color: var(--muted); }
+.flowbtn:hover { border-color: var(--edge); }
+.flowbtn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.flowbtn[aria-pressed="true"] small { color: inherit; opacity: 0.75; }
+
+.mapbox { background: var(--canvas); border: 1px solid var(--line); border-radius: 10px; }
+.mapscroll { overflow-x: auto; padding: 8px; }
+.mapscroll svg { display: block; width: 100%; min-width: 900px; height: auto; }
+.scrollhint { display: none; font-size: 13px; color: var(--muted); padding: 10px 14px 0; margin: 0; }
+@media (max-width: 940px) { .scrollhint { display: block; } }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 12px 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend .ln { width: 26px; height: 0; border-top: 2px solid var(--edge); }
+.legend .ln.net { border-top-style: dashed; }
+
+.steps { margin-top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; }
+.steps h3 { margin-bottom: 8px; }
+.steps p { margin: 0; max-width: 72ch; }
+.steps ol { margin: 0; padding-left: 1.4em; display: grid; gap: 6px; max-width: 80ch; }
+.steps li::marker { font-weight: 700; color: var(--muted); }
+
+/* svg */
+.sep { stroke: var(--line); stroke-dasharray: 3 5; }
+.bl { font: 700 10.5px var(--sans); letter-spacing: 0.08em; fill: var(--muted); }
+.bl tspan.f { font: 400 11px var(--mono); letter-spacing: 0; }
+.node rect, .node ellipse, .node path { fill: var(--t); stroke: var(--c); stroke-width: 1.3; transition: stroke-width .15s; }
+a.node { cursor: pointer; }
+a.node:hover rect, a.node:focus-visible rect { stroke-width: 2.4; }
+a.node:focus { outline: none; }
+.nn { font: 600 12.5px var(--mono); fill: var(--ink); }
+.nb { font: 700 15px var(--mono); fill: var(--ink); }
+.ns { font: 600 11.5px var(--mono); fill: var(--ink); }
+.nr { font: 400 11.5px var(--sans); fill: var(--muted); }
+.grp { fill: none; stroke: var(--line); stroke-width: 1.2; }
+.gt { font: 700 10.5px var(--sans); letter-spacing: 0.06em; fill: var(--muted); }
+.edge { fill: none; stroke: var(--edge); stroke-width: 1.5; marker-end: url(#ah); transition: stroke .15s; }
+.edge.net { stroke-dasharray: 6 4; }
+.mk { fill: var(--edge); }
+.mk-on { fill: var(--ink); }
+.el { font: 400 11px var(--sans); fill: var(--muted); paint-order: stroke; stroke: var(--canvas); stroke-width: 4px; stroke-linejoin: round; }
+.el.code { font-family: var(--mono); font-size: 10.5px; }
+svg [data-f] { transition: opacity .2s; }
+svg .dim { opacity: 0.12; }
+.flowing .e.on .edge { stroke: var(--ink); stroke-width: 2.4; marker-end: url(#ah-on); }
+.flowing .e.on .el { fill: var(--ink); font-weight: 600; }
+.flowing .node.on rect, .flowing .node.on ellipse, .flowing .node.on path { stroke-width: 2.2; }
+
+/* files */
+.files { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 40px; align-items: start; }
+.tree { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font: 400 13px/1.5 var(--mono); max-height: calc(100vh - 32px); overflow: auto; }
+.tree ul { list-style: none; margin: 0; padding-left: 14px; border-left: 1px solid var(--line); }
+.tree > ul { padding-left: 0; border-left: 0; }
+.tree li { padding-block: 1px; }
+.tree .dir { font-weight: 600; color: var(--muted); }
+.tree a { text-decoration: none; display: inline-flex; align-items: center; gap: 7px; border-radius: 4px; padding-inline: 2px; }
+.tree a:hover { text-decoration: underline; }
+.tree .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+.tree .muted { color: var(--muted); }
+
+.folder + .folder { margin-top: 36px; }
+.folder > h3 { font: 600 14px/1.4 var(--mono); color: var(--muted); margin: 0 0 4px; }
+.folder > h3 b { color: var(--ink); }
+.folder > .fnote { margin: 0 0 8px; font-size: 14.5px; color: var(--muted); max-width: 72ch; }
+.file { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 4px 24px; padding-block: 14px; border-top: 1px solid var(--line); scroll-margin-top: 16px; border-radius: 6px; transition: background .4s; }
+.file:target { background: var(--t); padding-inline: 10px; }
+.fname { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; min-width: 0; }
+.fname code { background: none; padding: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.chip { font: 600 11px/1 var(--sans); letter-spacing: 0.04em; text-transform: uppercase; color: var(--c); background: var(--t); border: 1px solid color-mix(in srgb, var(--c) 35%, transparent); padding: 4px 7px; border-radius: 4px; }
+.fdesc { min-width: 0; }
+.fdesc p { margin: 0; font-size: 15px; }
+.fdesc p + p { margin-top: 6px; }
+.uses { font-size: 13.5px !important; color: var(--muted); }
+.extra { margin-top: 36px; padding: 16px 18px; border: 1px dashed var(--line); border-radius: 8px; font-size: 14.5px; color: var(--muted); }
+.extra p { margin: 0; }
+.extra p + p { margin-top: 6px; }
+.extra code { color: var(--ink); }
+
+/* trace */
+.trace { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+.trace > li { counter-increment: s; display: grid; grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) minmax(0, 1.15fr); gap: 8px 24px; padding-block: 16px; border-top: 1px solid var(--line); align-items: start; }
+.t-file { display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+.t-file::before { content: counter(s); font: 700 13px/1 var(--mono); color: var(--muted); width: 1.2em; flex: none; }
+.t-file code { background: none; padding: 0; font-weight: 600; color: var(--c); font-size: 13.5px; overflow-wrap: anywhere; }
+.t-what { margin: 0; font-size: 15px; min-width: 0; }
+.trace pre { margin: 0; background: var(--code-bg); border-radius: 6px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5; overflow-x: auto; min-width: 0; }
+.trace pre code { background: none; padding: 0; font-size: inherit; }
+.trace-title { margin: 32px 0 10px; }
+.intro + .trace-title { margin-top: 0; }
+.fail { margin-top: 18px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 8px 24px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 7%, var(--surface)); border-radius: 8px; }
+.fail h3 { color: var(--warn); }
+.fail p { margin: 0; font-size: 15px; }
+.fail pre { margin: 0; background: var(--code-bg); border-radius: 6px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5; overflow-x: auto; }
+
+/* patterns */
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; min-width: 0; }
+.panel p { margin: 0 0 12px; font-size: 15px; }
+.panel pre { margin: 0 0 12px; background: var(--code-bg); border-radius: 6px; padding: 12px 14px; font-size: 12.5px; line-height: 1.55; overflow-x: auto; }
+.panel pre:last-child, .panel p:last-child { margin-bottom: 0; }
+.panel .cm { color: var(--muted); }
+
+.todo { margin-top: 16px; padding: 18px 22px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.todo ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: 15px; }
+
+/* teori: begreper som nøytrale chips (farge er reservert for lag) + oppslag nederst */
+.lead-note { font-size: 0.98rem; color: var(--muted); margin: 14px 0 0; }
+.kc { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.kc-l { font: 700 10.5px/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+a.k { display: inline-block; max-width: 100%; font: 500 12.5px/1.25 var(--sans); color: var(--ink); text-decoration: none; border: 1px solid var(--line); border-radius: 13px; padding: 5px 10px; transition: border-color .15s, background .15s; }
+a.k:hover { border-color: var(--edge); background: var(--code-bg); }
+.layer .kc { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); }
+.layer .kc-l { flex-basis: 100%; }
+.folder > .kc { margin: 0 0 14px; }
+.panel .kc { margin-top: 0; }
+.todo .kc { margin-top: 14px; }
+.extra .kc { margin-top: 12px; }
+
+.themes { display: grid; gap: 32px; }
+.theme > h3 { margin: 0 0 2px; }
+.theme > .tnote { margin: 0 0 10px; font-size: 14.5px; color: var(--muted); max-width: 72ch; }
+.concept { border-top: 1px solid var(--line); border-radius: 6px; scroll-margin-top: 16px; transition: background .4s; }
+.concept:target { background: var(--code-bg); padding-inline: 10px; }
+.concept > summary { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) auto; gap: 4px 24px; align-items: baseline; padding-block: 12px; cursor: pointer; list-style: none; }
+.concept > summary::-webkit-details-marker { display: none; }
+.concept > summary::after { content: "+"; font: 400 17px/1 var(--mono); color: var(--muted); }
+.concept[open] > summary::after { content: "\2013"; }
+.concept > summary:hover .c-name { text-decoration: underline; }
+.c-name { font-weight: 700; font-size: 15px; }
+.c-gist { font-size: 15px; color: var(--muted); }
+.concept > .c-body { margin-left: calc(15rem + 24px); padding-bottom: 18px; max-width: 64ch; }
+.c-body { font-size: 15px; }
+.c-body p { margin: 0 0 10px; }
+.c-body h4 { font: 700 10.5px/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 16px 0 6px; }
+.c-body ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.c-body li span { color: var(--muted); }
+.c-body .kc { margin-top: 16px; }
+
+.kdlg { width: min(640px, calc(100vw - 32px)); max-height: min(84vh, 760px); padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); box-shadow: 0 24px 64px rgb(0 0 0 / 0.28); overscroll-behavior: contain; }
+.kdlg::backdrop { background: rgb(15 20 26 / 0.5); }
+.kdlg-in { padding: 22px 24px 24px; }
+.kdlg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.kdlg-head h3 { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.015em; line-height: 1.2; margin: 6px 0 4px; text-wrap: balance; }
+.kdlg-gist { margin: 0 0 16px; color: var(--muted); }
+.kdlg-close { flex: none; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink); font: 400 22px/1 var(--sans); cursor: pointer; }
+.kdlg-close:hover { border-color: var(--edge); }
+@media (max-width: 860px) {
+  .concept > summary { grid-template-columns: minmax(0, 1fr) auto; }
+  .c-gist { grid-column: 1; grid-row: 2; }
+  .concept > summary::after { grid-column: 2; grid-row: 1; }
+  .concept > .c-body { margin-left: 0; }
+}
+
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+
+@media (max-width: 860px) {
+  .files { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .tree { position: static; max-height: none; }
+  .trace > li { grid-template-columns: minmax(0, 1fr); }
+  .fail { grid-template-columns: minmax(0, 1fr); }
+  .pair { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .file { grid-template-columns: minmax(0, 1fr); }
+  header { padding-block: 32px 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+  html { scroll-behavior: auto; }
+}
+body { margin: 0; }
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="read">
+    <div class="eyebrow">webapp/tasks/src · worker.tsx + features/tasks/ + db/</div>
+    <h1>Slik henger tasks-appen sammen</h1>
+    <p class="lead">Alle forespørsler kommer inn i <code>worker.tsx</code>. Derfra går de gjennom filene i <code>features/tasks/</code> og ned til databasen via <code>db/</code>. Hvert lag gjør én jobb og snakker bare med laget rett under seg.</p>
+    <p class="lead-note">Under hvert lag og hver fil står begrepene de bygger på. Klikk på et begrep for å se teorien og hvilken leksjon den kommer fra. <a href="#teori">Alle begrepene står samlet nederst</a>.</p>
+  </header>
+
+  <section id="lag" aria-labelledby="h-lag">
+    <h2 id="h-lag">Lagene</h2>
+    <p class="intro read">Hver fil har én rolle. Fargene betyr det samme i hele dokumentet.</p>
+    <div class="layers">
+      <div class="layer l-entry">
+        <div class="layer-head"><span class="sw"></span><span class="layer-name">Inngang</span></div>
+        <div class="layer-where">worker.tsx</div>
+        <p>Tar imot alle forespørsler og sender dem til riktig rute eller side.</p>
+        <p class="like">Hovmesteren i døra.</p>
+        <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-http">Request og response</a><a class="k" href="#k-ruting">Ruting</a><a class="k" href="#k-workers">Workers og bindinger</a></div>
+      </div>
+      <div class="layer l-recv">
+        <div class="layer-head"><span class="sw"></span><span class="layer-name">Mottak</span></div>
+        <div class="layer-where">task-routes, task-controller, pages/TasksPage, TaskFilter, actions</div>
+        <p>Tar imot på tre måter (API, side, skjema) og gjør det om til et kall til service.</p>
+        <p class="like">Servitøren som tar bestillingen.</p>
+        <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-rest">REST</a><a class="k" href="#k-server-actions">Server actions</a><a class="k" href="#k-rsc">Server- og klientkomponenter</a></div>
+      </div>
+      <div class="layer l-client">
+        <div class="layer-head"><span class="sw"></span><span class="layer-name">Nettleser</span></div>
+        <div class="layer-where">TaskList, CreateTaskForm, TaskItem, TasksPageClient, task-api</div>
+        <p>Kode som kjører hos brukeren: viser listen og skjemaet, og henter, endrer og sletter data.</p>
+        <p class="like">Gjesten ved bordet.</p>
+        <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-props">Props og komposisjon</a><a class="k" href="#k-props-drilling">Props drilling og Context</a><a class="k" href="#k-state">State</a></div>
+      </div>
+      <div class="layer l-logic">
+        <div class="layer-head"><span class="sw"></span><span class="layer-name">Logikk</span></div>
+        <div class="layer-where">task-service + utils/, task-schema, task-mapper</div>
+        <p>Reglene: sjekker input, bestemmer hva som skal skje og lager svaret.</p>
+        <p class="like">Kokken som følger oppskriften.</p>
+        <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-n-lag">N-lags arkitektur</a><a class="k" href="#k-validering">Inputvalidering</a><a class="k" href="#k-dto">DTO og mappere</a></div>
+      </div>
+      <div class="layer l-access">
+        <div class="layer-head"><span class="sw"></span><span class="layer-name">Datatilgang</span></div>
+        <div class="layer-where">task-repository</div>
+        <p>Det eneste stedet i features/tasks/ som snakker med databasen.</p>
+        <p class="like">Lagersjefen, den eneste med nøkkel.</p>
+        <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-repository">Repository-mønsteret</a><a class="k" href="#k-di">Dependency Injection</a></div>
+      </div>
+      <div class="layer l-db">
+        <div class="layer-head"><span class="sw"></span><span class="layer-name">Database</span></div>
+        <div class="layer-where">db/</div>
+        <p>Tabellene, relasjonene og koblingen til Cloudflare D1.</p>
+        <p class="like">Selve lageret med hyllene.</p>
+        <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-orm">ORM og skjema</a><a class="k" href="#k-migrasjoner">Migrasjoner</a></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="kart" aria-labelledby="h-kart">
+    <h2 id="h-kart">Kartet</h2>
+    <p class="intro read">Tre veier inn, én vei ned. Velg en vei for å se hvilke filer den går gjennom. Klikk på en fil for å lese hva den gjør. Pilene betyr «kaller» eller «bruker».</p>
+
+    <div class="controls" role="group" aria-label="Velg vei gjennom appen">
+      <button class="flowbtn" type="button" data-flow="all" aria-pressed="true">Alle</button>
+      <button class="flowbtn" type="button" data-flow="page" aria-pressed="false">Siden <small>/tasks</small></button>
+      <button class="flowbtn" type="button" data-flow="form" aria-pressed="false">Skjemaet <small>server action</small></button>
+      <button class="flowbtn" type="button" data-flow="update" aria-pressed="false">Kryss av <small>server action</small></button>
+      <button class="flowbtn" type="button" data-flow="remove" aria-pressed="false">Slett <small>DELETE /api/v1/tasks/:id</small></button>
+      <button class="flowbtn" type="button" data-flow="rest" aria-pressed="false">REST-API <small>POST /api/v1/tasks</small></button>
+      <button class="flowbtn" type="button" data-flow="client" aria-pressed="false">Siden <small>/tasks-client</small></button>
+    </div>
+
+    <figure class="mapbox" style="margin:0">
+      <p class="scrollhint">Dra sideveis for å se hele kartet.</p>
+      <div class="mapscroll">
+        <svg id="map" viewBox="0 0 1140 1010" role="img" aria-label="Kart over tasks-appen. worker.tsx sender forespørsler til tre innganger: REST-API via task-routes og task-controller, serversiden TasksPage med TaskFilter, og server actions i actions.ts. Alle tre kaller task-service.ts, som bruker hjelpefilene og kaller task-repository.ts, som bruker db/index.ts og Cloudflare D1. TaskItem krysser av via actions.ts, og sletter via TaskList, task-api.ts og REST-API-et.">
+          <defs>
+            <marker id="ah" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><path class="mk" d="M0,0 L8,4 L0,8 z"/></marker>
+            <marker id="ah-on" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto"><path class="mk-on" d="M0,0 L8,4 L0,8 z"/></marker>
+          </defs>
+
+          <!-- band separators + labels -->
+          <line class="sep" x1="0" y1="92" x2="1140" y2="92"/>
+          <line class="sep" x1="0" y1="512" x2="1140" y2="512"/>
+          <line class="sep" x1="0" y1="716" x2="1140" y2="716"/>
+          <line class="sep" x1="0" y1="824" x2="1140" y2="824"/>
+          <text class="bl" x="1124" y="22" text-anchor="end">1 INNGANG <tspan class="f">src/worker.tsx</tspan></text>
+          <text class="bl" x="1124" y="118" text-anchor="end">2 MOTTAK <tspan class="f">src/features/tasks/ · pages/ · components/</tspan></text>
+          <text class="bl" x="1124" y="534" text-anchor="end">3 LOGIKK <tspan class="f">src/features/tasks/ · utils/</tspan></text>
+          <text class="bl" x="1124" y="740" text-anchor="end">4 DATATILGANG <tspan class="f">src/features/tasks/</tspan></text>
+          <text class="bl" x="1124" y="846" text-anchor="end">5 DATABASE <tspan class="f">src/db/</tspan></text>
+
+          <!-- edges -->
+          <g class="e" data-f="client"><polyline class="edge" points="470,78 470,100 108,100 108,140"/><text class="el code" x="114" y="124">/tasks-client</text></g>
+          <g class="e" data-f="rest"><polyline class="edge" points="530,78 530,116 374,116 374,240"/><text class="el code" x="380" y="176">/api/v1/tasks/*</text></g>
+          <g class="e" data-f="page"><polyline class="edge" points="598,78 598,140"/><text class="el code" x="604" y="118">/tasks</text></g>
+          <g class="e" data-f="client"><polyline class="edge" points="108,192 108,240"/><text class="el code" x="102" y="221" text-anchor="end">listTasks()</text></g>
+          <g class="e" data-f="remove"><polyline class="edge" points="750,240 750,216 160,216 160,240"/><text class="el code" x="250" y="209" text-anchor="middle">removeTask(id)</text></g>
+          <g class="e" data-f="client remove"><polyline class="edge net" points="196,266 276,266"/><text class="el code" x="236" y="258" text-anchor="middle">fetch</text></g>
+          <g class="e" data-f="client rest remove"><polyline class="edge" points="374,292 374,340"/><text class="el" x="380" y="321">velger funksjon</text></g>
+          <g class="e" data-f="client rest remove"><polyline class="edge" points="374,392 374,584"/><text class="el code" x="380" y="464">service.list / .create<tspan x="380" dy="14">/ .update / .remove</tspan></text></g>
+          <g class="e" data-f="page"><polyline class="edge" points="598,192 598,584"/><text class="el code" x="604" y="300">service.list()</text></g>
+          <g class="e" data-f="page"><polyline class="edge" points="696,166 822,166 822,240"/><text class="el" x="759" y="159" text-anchor="middle">rendrer</text></g>
+          <g class="e" data-f="page"><polyline class="edge" points="822,166 942,166"/></g>
+          <g class="e" data-f="form"><polyline class="edge" points="822,292 822,340"/><text class="el" x="828" y="321">rendrer</text></g>
+          <g class="e" data-f="page"><polyline class="edge" points="920,254 1060,254 1060,340"/><text class="el" x="990" y="247" text-anchor="middle">én per oppgave</text></g>
+          <g class="e" data-f="remove"><polyline class="edge" points="1016,340 1016,280 920,280"/><text class="el code" x="926" y="296">onDelete(id)</text></g>
+          <g class="e" data-f="form"><polyline class="edge net" points="822,392 822,440"/><text class="el" x="828" y="421">server action (POST)</text></g>
+          <g class="e" data-f="update"><polyline class="edge net" points="1031,392 1031,466 920,466"/><text class="el code" x="926" y="482">toggleTaskCompleted()</text></g>
+          <g class="e" data-f="form update"><polyline class="edge" points="822,492 822,584"/><text class="el code" x="814" y="545" text-anchor="end">service.create / .update</text></g>
+          <g class="e" data-f="client rest page form update"><polyline class="edge" points="880,616 932,616"/><text class="el" x="906" y="608" text-anchor="middle">bruker</text></g>
+          <g class="e" data-f="client rest page form update remove"><polyline class="edge" points="598,648 598,748"/><text class="el code" x="604" y="702">findMany / create / update / remove</text></g>
+          <g class="e" data-f="client rest page form update remove"><polyline class="edge" points="598,800 598,870"/><text class="el code" x="604" y="840">db.query / insert / update / delete</text></g>
+          <g class="e" data-f="client rest page form update remove"><polyline class="edge" points="500,896 400,896"/><text class="el" x="450" y="888" text-anchor="middle">bruker</text></g>
+          <g class="e" data-f="client rest page form update remove"><polyline class="edge" points="696,896 952,896"/><text class="el" x="824" y="888" text-anchor="middle">SQL via env.DB</text></g>
+          <g class="e" data-f=""><polyline class="edge" points="1031,966 1031,938"/><text class="el" x="1022" y="958" text-anchor="end">tømmer + fyller</text></g>
+
+          <!-- 1 inngang -->
+          <a class="node l-entry" href="#f-worker" data-f="client rest page"><rect x="420" y="26" width="300" height="52" rx="6"/><text class="nn" x="434" y="47">worker.tsx</text><text class="nr" x="434" y="65">defineApp: alle ruter i rekkefølge</text></a>
+
+          <!-- 2 mottak + nettleser -->
+          <a class="node l-client" href="#f-TasksPageClient" data-f="client"><rect x="20" y="140" width="176" height="52" rx="6"/><text class="nn" x="32" y="161">TasksPageClient.tsx</text><text class="nr" x="32" y="179">side /tasks-client</text></a>
+          <a class="node l-recv" href="#f-TasksPage" data-f="page"><rect x="500" y="140" width="196" height="52" rx="6"/><text class="nn" x="512" y="161">TasksPage.tsx</text><text class="nr" x="512" y="179">side /tasks, på serveren</text></a>
+          <a class="node l-recv" href="#f-TaskFilter" data-f="page"><rect x="942" y="140" width="178" height="52" rx="6"/><text class="nn" x="954" y="161">TaskFilter.tsx</text><text class="nr" x="954" y="179">GET-skjema: søk + status</text></a>
+          <a class="node l-client" href="#f-task-api" data-f="client remove"><rect x="20" y="240" width="176" height="52" rx="6"/><text class="nn" x="32" y="261">task-api.ts</text><text class="nr" x="32" y="279">fetch i nettleseren</text></a>
+          <a class="node l-recv" href="#f-task-routes" data-f="client rest remove"><rect x="276" y="240" width="196" height="52" rx="6"/><text class="nn" x="288" y="261">task-routes.ts</text><text class="nr" x="288" y="279">URL + metode → funksjon</text></a>
+          <a class="node l-client" href="#f-TaskList" data-f="page form remove"><rect x="724" y="240" width="196" height="52" rx="6"/><text class="nn" x="736" y="261">TaskList.tsx</text><text class="nr" x="736" y="279">skjema + liste</text></a>
+          <a class="node l-recv" href="#f-task-controller" data-f="client rest remove"><rect x="276" y="340" width="196" height="52" rx="6"/><text class="nn" x="288" y="361">task-controller.ts</text><text class="nr" x="288" y="379">request inn, Response ut</text></a>
+          <a class="node l-client" href="#f-CreateTaskForm" data-f="form"><rect x="724" y="340" width="196" height="52" rx="6"/><text class="nn" x="736" y="361">CreateTaskForm.tsx</text><text class="nr" x="736" y="379">skjemaet «Ny oppgave»</text></a>
+          <a class="node l-client" href="#f-TaskItem" data-f="page update remove"><rect x="942" y="340" width="178" height="52" rx="6"/><text class="nn" x="954" y="361">TaskItem.tsx</text><text class="nr" x="954" y="379">én rad i listen</text></a>
+          <a class="node l-recv" href="#f-actions" data-f="form update"><rect x="724" y="440" width="196" height="52" rx="6"/><text class="nn" x="736" y="461">actions.ts</text><text class="nr" x="736" y="479">"use server"</text></a>
+
+          <!-- 3 logikk -->
+          <a class="node l-logic" href="#f-task-service" data-f="client rest page form update remove"><rect x="276" y="584" width="604" height="64" rx="6"/><text class="nb" x="292" y="611">task-service.ts</text><text class="nr" x="292" y="632">reglene: sjekk input → hent eller lagre → gjør om til DTO</text></a>
+          <g data-f="client rest page form update"><rect class="grp" x="932" y="546" width="196" height="158" rx="8"/><text class="gt" x="942" y="562">HJELPERE</text></g>
+          <a class="node l-logic" href="#f-task-schema" data-f="rest form update"><rect x="942" y="570" width="176" height="28" rx="5"/><text class="ns" x="952" y="588">task-schema.ts</text></a>
+          <a class="node l-logic" href="#f-validate-task" data-f="rest form update"><rect x="942" y="604" width="176" height="28" rx="5"/><text class="ns" x="952" y="622">validate-task.ts</text></a>
+          <a class="node l-logic" href="#f-validate-list-params" data-f="client page"><rect x="942" y="638" width="176" height="28" rx="5"/><text class="ns" x="952" y="656">validate-list-params.ts</text></a>
+          <a class="node l-logic" href="#f-task-mapper" data-f="client rest page form update"><rect x="942" y="672" width="176" height="28" rx="5"/><text class="ns" x="952" y="690">task-mapper.ts</text></a>
+
+          <!-- 4 datatilgang -->
+          <a class="node l-access" href="#f-task-repository" data-f="client rest page form update remove"><rect x="500" y="748" width="196" height="52" rx="6"/><text class="nn" x="512" y="769">task-repository.ts</text><text class="nr" x="512" y="787">eneste som rører db</text></a>
+
+          <!-- 5 database -->
+          <a class="node l-db" href="#f-db-index" data-f="client rest page form update remove"><rect x="500" y="870" width="196" height="52" rx="6"/><text class="nn" x="512" y="891">db/index.ts</text><text class="nr" x="512" y="909">drizzle(env.DB)</text></a>
+          <g data-f="client rest page form update remove"><rect class="grp" x="20" y="852" width="380" height="114" rx="8"/><text class="gt" x="32" y="869">TABELLER OG RELASJONER</text></g>
+          <a class="node l-db" href="#f-db-task-schema" data-f="client rest page form update remove"><rect x="32" y="878" width="172" height="32" rx="5"/><text class="ns" x="42" y="898">schema/task-schema.ts</text></a>
+          <a class="node l-db" href="#f-db-user-schema" data-f="client rest page form update remove"><rect x="216" y="878" width="172" height="32" rx="5"/><text class="ns" x="226" y="898">schema/user-schema.ts</text></a>
+          <a class="node l-db" href="#f-relations" data-f="client rest page form update remove"><rect x="32" y="920" width="172" height="32" rx="5"/><text class="ns" x="42" y="940">relations.ts</text></a>
+          <a class="node l-db" href="#f-db-schema-index" data-f="client rest page form update remove"><rect x="216" y="920" width="172" height="32" rx="5"/><text class="ns" x="226" y="940">schema/index.ts</text></a>
+          <g class="node l-db" data-f="client rest page form update remove">
+            <path d="M952,870 V926 A79,10 0 0 0 1110,926 V870"/>
+            <ellipse cx="1031" cy="870" rx="79" ry="10"/>
+            <text class="nn" x="1031" y="902" text-anchor="middle">Cloudflare D1</text>
+            <text class="nr" x="1031" y="919" text-anchor="middle">SQLite: users, tasks</text>
+          </g>
+          <a class="node l-db" href="#f-seed" data-f=""><rect x="962" y="966" width="138" height="30" rx="5"/><text class="ns" x="974" y="985">seed.ts</text></a>
+        </svg>
+      </div>
+      <figcaption class="legend">
+        <span><i class="sw l-entry"></i>Inngang</span>
+        <span><i class="sw l-recv"></i>Mottak (server)</span>
+        <span><i class="sw l-client"></i>Nettleser</span>
+        <span><i class="sw l-logic"></i>Logikk</span>
+        <span><i class="sw l-access"></i>Datatilgang</span>
+        <span><i class="sw l-db"></i>Database</span>
+        <span><i class="ln"></i>kall i samme prosess</span>
+        <span><i class="ln net"></i>over nettverket (HTTP)</span>
+      </figcaption>
+    </figure>
+
+    <div class="steps" id="steps" aria-live="polite">
+      <h3>Tre veier inn, én vei ned</h3>
+      <p>Controlleren, <code>TasksPage.tsx</code> og <code>actions.ts</code> tar imot på hver sin måte, men alle tre kaller den samme <code>task-service.ts</code>. Derfor ligger reglene for en oppgave bare ett sted, og alle veier ender i samme repository og samme database. Å krysse av og å slette bruker hver sin vei: avkrysningen går gjennom en server action i <code>actions.ts</code>, slettingen gjennom <code>fetch</code> og REST-API-et.</p>
+    </div>
+  </section>
+
+  <section id="filer" aria-labelledby="h-filer">
+    <h2 id="h-filer">Filene, mappe for mappe</h2>
+    <p class="intro read">Treet til venstre viser mappene slik de ser ut i editoren. Klikk på en fil for å hoppe til forklaringen.</p>
+
+    <div class="files">
+      <nav class="tree" aria-label="Filtre">
+        <ul>
+          <li><span class="dir">src/</span>
+            <ul>
+              <li><span class="dir">db/</span>
+                <ul>
+                  <li><span class="dir">schema/</span>
+                    <ul>
+                      <li><a href="#f-db-schema-index" class="l-db"><i class="dot"></i>index.ts</a></li>
+                      <li><a href="#f-db-task-schema" class="l-db"><i class="dot"></i>task-schema.ts</a></li>
+                      <li><a href="#f-db-user-schema" class="l-db"><i class="dot"></i>user-schema.ts</a></li>
+                    </ul>
+                  </li>
+                  <li><a href="#f-db-index" class="l-db"><i class="dot"></i>index.ts</a></li>
+                  <li><a href="#f-relations" class="l-db"><i class="dot"></i>relations.ts</a></li>
+                  <li><a href="#f-seed" class="l-db"><i class="dot"></i>seed.ts</a></li>
+                </ul>
+              </li>
+              <li><span class="dir">features/tasks/</span>
+                <ul>
+                  <li><span class="dir">__tests__/</span>
+                    <ul>
+                      <li><a href="#f-test-task-mapper" class="l-logic"><i class="dot"></i>task-mapper.test.ts</a></li>
+                      <li><a href="#f-test-task-service" class="l-logic"><i class="dot"></i>task-service.test.ts</a></li>
+                      <li><a href="#f-test-TaskFilter" class="l-recv"><i class="dot"></i>TaskFilter.test.tsx</a></li>
+                    </ul>
+                  </li>
+                  <li><span class="dir">components/</span>
+                    <ul>
+                      <li><a href="#f-CreateTaskForm" class="l-client"><i class="dot"></i>CreateTaskForm.tsx</a></li>
+                      <li><a href="#f-TaskFilter" class="l-recv"><i class="dot"></i>TaskFilter.tsx</a></li>
+                      <li><a href="#f-TaskItem" class="l-client"><i class="dot"></i>TaskItem.tsx</a></li>
+                      <li><a href="#f-TaskList" class="l-client"><i class="dot"></i>TaskList.tsx</a></li>
+                    </ul>
+                  </li>
+                  <li><span class="dir">pages/</span>
+                    <ul>
+                      <li><a href="#f-TasksPage" class="l-recv"><i class="dot"></i>TasksPage.tsx</a></li>
+                      <li><a href="#f-TasksPageClient" class="l-client"><i class="dot"></i>TasksPageClient.tsx</a></li>
+                    </ul>
+                  </li>
+                  <li><span class="dir">utils/</span>
+                    <ul>
+                      <li><a href="#f-date" class="l-logic"><i class="dot"></i>date.ts</a></li>
+                      <li><a href="#f-parse-params" class="l-recv"><i class="dot"></i>parse-params.ts</a></li>
+                      <li><a href="#f-validate-list-params" class="l-logic"><i class="dot"></i>validate-list-params.ts</a></li>
+                      <li><a href="#f-validate-task" class="l-logic"><i class="dot"></i>validate-task.ts</a></li>
+                    </ul>
+                  </li>
+                  <li><a href="#f-actions" class="l-recv"><i class="dot"></i>actions.ts</a></li>
+                  <li><a href="#f-task-api" class="l-client"><i class="dot"></i>task-api.ts</a></li>
+                  <li><a href="#f-task-controller" class="l-recv"><i class="dot"></i>task-controller.ts</a></li>
+                  <li><a href="#f-task-mapper" class="l-logic"><i class="dot"></i>task-mapper.ts</a></li>
+                  <li><a href="#f-task-repository" class="l-access"><i class="dot"></i>task-repository.ts</a></li>
+                  <li><a href="#f-task-routes" class="l-recv"><i class="dot"></i>task-routes.ts</a></li>
+                  <li><a href="#f-task-schema" class="l-logic"><i class="dot"></i>task-schema.ts</a></li>
+                  <li><a href="#f-task-service" class="l-logic"><i class="dot"></i>task-service.ts</a></li>
+                </ul>
+              </li>
+              <li><a href="#f-worker" class="l-entry"><i class="dot"></i>worker.tsx</a></li>
+            </ul>
+          </li>
+        </ul>
+      </nav>
+
+      <div>
+        <div class="folder">
+          <h3>src/<b>worker.tsx</b></h3>
+          <div class="file l-entry" id="f-worker">
+            <div class="fname"><code>worker.tsx</code><span class="chip">Inngang</span></div>
+            <div class="fdesc">
+              <p>Startpunktet for hele appen. <code>defineApp</code> er en liste som leses ovenfra og ned for hver forespørsel: først felles headere (<code>setCommonHeaders</code>), så API-rutene fra <code>taskRoutes</code>, så <code>/api/status</code>, og til slutt sidene som vises inni <code>Document</code>: <code>/</code>, <code>/tasks</code> og <code>/tasks-client</code>.</p>
+              <p class="uses">Bruker: <code>task-routes.ts</code>, <code>pages/TasksPage.tsx</code>, <code>pages/TasksPageClient.tsx</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-http">Request og response</a><a class="k" href="#k-ruting">Ruting</a><a class="k" href="#k-middleware">Middleware</a><a class="k" href="#k-workers">Workers og bindinger</a></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/features/<b>tasks/</b></h3>
+          <p class="fnote">Alt som handler om oppgaver. Filene på toppnivå er lagene; undermappene er sider, komponenter, hjelpere og tester.</p>
+          <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-features">Features-basert struktur</a><a class="k" href="#k-n-lag">N-lags arkitektur</a><a class="k" href="#k-soc">Separation of Concerns</a></div>
+
+          <div class="file l-recv" id="f-task-routes">
+            <div class="fname"><code>task-routes.ts</code><span class="chip">Mottak</span></div>
+            <div class="fdesc">
+              <p>Oversikten over API-et. Kobler URL og HTTP-metode til riktig funksjon i controlleren: <code>GET</code>/<code>POST</code> på <code>/api/v1/tasks</code>, <code>GET</code>/<code>PATCH</code>/<code>DELETE</code> på <code>/api/v1/tasks/:id</code> og <code>POST</code> på <code>/api/v1/tasks/:id/:action</code>. Her kan mellomvare som <code>requireUser</code> legges inn senere.</p>
+              <p class="uses">Bruker: <code>task-controller.ts</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-rest">REST</a><a class="k" href="#k-http-metoder">HTTP-metoder</a><a class="k" href="#k-url-design">URL-design</a><a class="k" href="#k-ruting">Ruting</a></div>
+            </div>
+          </div>
+
+          <div class="file l-recv" id="f-task-controller">
+            <div class="fname"><code>task-controller.ts</code><span class="chip">Mottak</span></div>
+            <div class="fdesc">
+              <p>Oversetter mellom HTTP og resten av appen. Leser det som kommer inn (query-parametre, <code>params.id</code> fra URL-en, JSON-body), kaller service, og gjør svaret om til en <code>Response</code> med statuskode: 200 for listen, én oppgave og en oppdatering, 201 for ny oppgave, 204 uten body for sletting, og ellers koden fra feilen (400, 404 eller 500).</p>
+              <p>Er body ikke gyldig JSON, svarer <code>create</code> og <code>update</code> 400 selv, uten å spørre service. <code>action</code> er ikke ferdig ennå.</p>
+              <p class="uses">Bruker: <code>task-service.ts</code>, <code>utils/parse-params.ts</code>, <code>lib/demo-chaos.ts</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-n-lag">N-lags arkitektur</a><a class="k" href="#k-statuskoder">Statuskoder</a><a class="k" href="#k-result">Result-mønsteret</a></div>
+            </div>
+          </div>
+
+          <div class="file l-recv" id="f-actions">
+            <div class="fname"><code>actions.ts</code><span class="chip">Mottak</span></div>
+            <div class="fdesc">
+              <p>Server actions (<code>"use server"</code>). Nettleseren kaller dem som om de var vanlige funksjoner, og React sender kallet som en POST til serveren. <code>createTaskAction</code> leser <code>title</code> og <code>dueDate</code> fra <code>FormData</code>, kaller <code>service.create</code> og sender tilbake enten den nye oppgaven, eller feilene sammen med det brukeren skrev.</p>
+              <p><code>toggleTaskCompleted(id, completed)</code> brukes av avkrysningsboksen. Den kaller <code>service.update(id, { completed })</code> og sender tilbake den oppdaterte oppgaven, eller feilmeldingen som tekst.</p>
+              <p class="uses">Bruker: <code>task-service.ts</code>, <code>lib/demo-chaos.ts</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-server-actions">Server actions</a><a class="k" href="#k-result">Result-mønsteret</a><a class="k" href="#k-oppdatering">Oppdatering etter endring</a></div>
+            </div>
+          </div>
+
+          <div class="file l-client" id="f-task-api">
+            <div class="fname"><code>task-api.ts</code><span class="chip">Nettleser</span></div>
+            <div class="fdesc">
+              <p>Kode for nettleseren som snakker med REST-API-et. <code>listTasks()</code> henter oppgaver, <code>createTask()</code> lager en ny og <code>removeTask(id)</code> sletter én, alle med <code>fetch</code>. Hvis serveren ikke svarer, gir funksjonene tilbake et vanlig <code>{ ok: false }</code>-svar i stedet for å krasje.</p>
+              <p>Et 204-svar har ingen body å lese. Derfor lager <code>removeTask</code> selv et <code>{ ok: true }</code>-svar når det gikk bra, og leser <code>error</code> fra svaret når det ikke gjorde det.</p>
+              <p class="uses">Bruker: <code>fetch</code> mot <code>/api/v1/tasks</code> og <code>/api/v1/tasks/:id</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-api-klient">API-klient</a><a class="k" href="#k-http-metoder">HTTP-metoder</a><a class="k" href="#k-typesikkerhet">Typesikkerhet</a></div>
+            </div>
+          </div>
+
+          <div class="file l-logic" id="f-task-service">
+            <div class="fname"><code>task-service.ts</code><span class="chip">Logikk</span></div>
+            <div class="fdesc">
+              <p>Hjernen. Her ligger reglene for oppgaver: sjekk at input har riktig form, sjekk reglene, be repository om data, og gjør databaseradene om til DTO-er. Filen vet ingenting om HTTP eller SQL. Derfor kan alle tre inngangene bruke den.</p>
+              <p><code>update</code> tar imot bare feltene som skal endres, og sier nei til en endring uten felt. <code>remove</code> sjekker først at oppgaven finnes. <code>findById</code>, <code>update</code> og <code>remove</code> svarer med kode <code>"404"</code> når id-en ikke finnes.</p>
+              <p class="uses">Bruker: <code>task-repository.ts</code>, <code>task-schema.ts</code>, <code>task-mapper.ts</code>, <code>utils/validate-task.ts</code>, <code>utils/validate-list-params.ts</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-n-lag">N-lags arkitektur</a><a class="k" href="#k-soc">Separation of Concerns</a><a class="k" href="#k-di">Dependency Injection</a><a class="k" href="#k-validering">Inputvalidering</a><a class="k" href="#k-result">Result-mønsteret</a></div>
+            </div>
+          </div>
+
+          <div class="file l-logic" id="f-task-schema">
+            <div class="fname"><code>task-schema.ts</code><span class="chip">Logikk</span></div>
+            <div class="fdesc">
+              <p>Zod-skjemaet for input. Beskriver hva en ny oppgave kan inneholde: <code>title</code> (tekst, trimmes), <code>completed</code> (valgfri) og <code>dueDate</code> (gjøres om fra tekst til <code>Date</code>). <code>updateTaskSchema</code> er det samme, bare med alle felt valgfrie, og brukes av <code>service.update</code>. Felt skjemaet ikke kjenner, som <code>id</code> og <code>userId</code>, fjernes.</p>
+              <p class="uses">Ikke å forveksle med <code>db/schema/task-schema.ts</code>, som beskriver tabellen.</p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-validering">Inputvalidering</a><a class="k" href="#k-typesikkerhet">Typesikkerhet</a></div>
+            </div>
+          </div>
+
+          <div class="file l-logic" id="f-task-mapper">
+            <div class="fname"><code>task-mapper.ts</code><span class="chip">Logikk</span></div>
+            <div class="fdesc">
+              <p><code>toTaskDTO</code> gjør en databaserad om til det klienten skal se. Den tar med <code>id</code>, <code>title</code>, <code>completed</code>, <code>dueDate</code> og <code>createdAt</code> (som tekst), og lar <code>userId</code> bli igjen på serveren. <code>TaskDTO</code>-typen brukes av sidene og komponentene.</p>
+              <p class="uses">Bruker: <code>Task</code>-typen fra <code>db/schema</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-dto">DTO og mappere</a><a class="k" href="#k-typesikkerhet">Typesikkerhet</a></div>
+            </div>
+          </div>
+
+          <div class="file l-access" id="f-task-repository">
+            <div class="fname"><code>task-repository.ts</code><span class="chip">Datatilgang</span></div>
+            <div class="fdesc">
+              <p>Det eneste stedet i <code>features/tasks/</code> som snakker med databasen. <code>findMany</code> filtrerer på <code>completed</code>, søker i tittelen med <code>q</code>, sorterer nyeste først og begrenser med <code>limit</code>. <code>create</code> setter inn en rad og får den tilbake. <code>findById</code> henter én rad, <code>update</code> endrer feltene den får og gir raden tilbake, og <code>remove</code> sletter raden. Finnes ikke id-en, svarer <code>findById</code> og <code>update</code> med <code>data: null</code>; det er service som gjør det om til 404. Databasefeil fanges og blir til <code>{ ok: false, code: "500" }</code>.</p>
+              <p class="uses">Bruker: <code>db</code> fra <code>db/index.ts</code>, <code>tasks</code>-tabellen fra <code>db/schema</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-repository">Repository-mønsteret</a><a class="k" href="#k-di">Dependency Injection</a><a class="k" href="#k-sql-injection">Parameteriserte spørringer</a></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/features/tasks/<b>pages/</b></h3>
+          <div class="file l-recv" id="f-TasksPage">
+            <div class="fname"><code>TasksPage.tsx</code><span class="chip">Mottak</span></div>
+            <div class="fdesc">
+              <p>Serverkomponent for <code>/tasks</code>. Leser query-parametrene fra URL-en, viser <code>TaskFilter</code> med dem, og henter oppgavene direkte fra service, uten <code>fetch</code>, fordi koden allerede kjører på serveren. Mens den venter, viser <code>Suspense</code> et skjelett. Går noe galt, vises feilmeldingen; ellers <code>TaskList</code>.</p>
+              <p class="uses">Bruker: <code>task-service.ts</code>, <code>utils/parse-params.ts</code>, <code>components/TaskFilter.tsx</code>, <code>components/TaskList.tsx</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-rsc">Server- og klientkomponenter</a><a class="k" href="#k-datahenting">Datahenting</a><a class="k" href="#k-suspense">Suspense</a><a class="k" href="#k-query-parametre">Query-parametre</a></div>
+            </div>
+          </div>
+          <div class="file l-client" id="f-TasksPageClient">
+            <div class="fname"><code>TasksPageClient.tsx</code><span class="chip">Nettleser</span></div>
+            <div class="fdesc">
+              <p>Klientkomponent for <code>/tasks-client</code>. Viser den andre måten å hente data på: siden kommer tom, og <code>useEffect</code> henter oppgavene via <code>task-api.ts</code> etterpå. Fin å sammenligne med <code>TasksPage</code>.</p>
+              <p class="uses">Bruker: <code>task-api.ts</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-datahenting">Datahenting</a><a class="k" href="#k-state">State</a><a class="k" href="#k-api-klient">API-klient</a></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/features/tasks/<b>components/</b></h3>
+          <div class="file l-recv" id="f-TaskFilter">
+            <div class="fname"><code>TaskFilter.tsx</code><span class="chip">Mottak</span></div>
+            <div class="fdesc">
+              <p>Filteret over listen: søkefelt (<code>q</code>) og status (<code>completed</code>). Et vanlig skjema med <code>method="get"</code>, uten <code>"use client"</code> og uten JavaScript. Nettleseren lager selv <code>/tasks?q=oblig&amp;completed=true</code> av feltnavnene og ber om siden på nytt.</p>
+              <p>Feltene fylles fra URL-en, så filteret alltid viser det som er valgt. «Nullstill» er en lenke til <code>/tasks</code>.</p>
+              <p class="uses">Bruker: <code>Params</code>-typen fra <code>utils/parse-params.ts</code>. Testet i <code>__tests__/TaskFilter.test.tsx</code>.</p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-progressive-enhancement">Progressive enhancement</a><a class="k" href="#k-query-parametre">Query-parametre</a><a class="k" href="#k-rsc">Server- og klientkomponenter</a></div>
+            </div>
+          </div>
+          <div class="file l-client" id="f-TaskList">
+            <div class="fname"><code>TaskList.tsx</code><span class="chip">Nettleser</span></div>
+            <div class="fdesc">
+              <p>Viser skjemaet for ny oppgave og én <code>TaskItem</code> per oppgave. Sender <code>createTaskAction</code> videre til skjemaet og <code>onDelete</code> videre til hver rad, begge som props.</p>
+              <p><code>onDelete</code> kaller <code>removeTask(id)</code> og ber deretter om siden på nytt med <code>navigate()</code>, så listen stemmer med databasen.</p>
+              <p class="uses">Bruker: <code>CreateTaskForm.tsx</code>, <code>TaskItem.tsx</code>, <code>actions.ts</code>, <code>task-api.ts</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-props">Props og komposisjon</a><a class="k" href="#k-props-drilling">Props drilling og Context</a><a class="k" href="#k-oppdatering">Oppdatering etter endring</a></div>
+            </div>
+          </div>
+          <div class="file l-client" id="f-CreateTaskForm">
+            <div class="fname"><code>CreateTaskForm.tsx</code><span class="chip">Nettleser</span></div>
+            <div class="fdesc">
+              <p>Skjemaet «Ny oppgave». <code>useActionState</code> kjører server action og tar vare på svaret: <code>isPending</code> gir «Lagrer…» på knappen, og feltfeil for <code>title</code> og <code>dueDate</code> vises under feltene. Ved feil fylles feltene inn igjen med det brukeren skrev.</p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-useactionstate">useActionState</a><a class="k" href="#k-server-actions">Server actions</a><a class="k" href="#k-props">Props og komposisjon</a></div>
+            </div>
+          </div>
+          <div class="file l-client" id="f-TaskItem">
+            <div class="fname"><code>TaskItem.tsx</code><span class="chip">Nettleser</span></div>
+            <div class="fdesc">
+              <p>Én rad i listen: avkrysningsboks, tittel (gjennomstreket når den er ferdig), frist, status og Slett-knapp.</p>
+              <p>Avkrysningen kaller <code>toggleTaskCompleted</code> inni <code>useTransition</code>. Mens serveren jobber, er boksen låst og statusen viser «lagrer…». Går det galt, vises feilmeldingen under raden. Slett-knappen kaller <code>onDelete(id)</code>, som raden får fra <code>TaskList</code>.</p>
+              <p class="uses">Bruker: <code>actions.ts</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-usetransition">useTransition</a><a class="k" href="#k-state">State</a><a class="k" href="#k-props">Props og komposisjon</a></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/features/tasks/<b>utils/</b></h3>
+          <div class="file l-recv" id="f-parse-params">
+            <div class="fname"><code>parse-params.ts</code><span class="chip">Mottak</span></div>
+            <div class="fdesc">
+              <p>Gjør <code>?completed=true&amp;q=melk</code> om til <code>{ completed: "true", q: "melk" }</code>. Alt er fortsatt tekst; sjekken skjer i service.</p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-query-parametre">Query-parametre</a><a class="k" href="#k-dry">DRY</a></div>
+            </div>
+          </div>
+          <div class="file l-logic" id="f-validate-list-params">
+            <div class="fname"><code>validate-list-params.ts</code><span class="chip">Logikk</span></div>
+            <div class="fdesc">
+              <p>Sjekker og gjør om listeparametrene: <code>completed</code> må være <code>"true"</code> eller <code>"false"</code> og blir en boolean, <code>q</code> trimmes, og <code>limit</code> blir et tall med øvre grense <code>LIST_LIMIT_MAX</code> (100). Ved feil svarer den med hvilket felt som er galt.</p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-validering">Inputvalidering</a><a class="k" href="#k-query-parametre">Query-parametre</a></div>
+            </div>
+          </div>
+          <div class="file l-logic" id="f-validate-task">
+            <div class="fname"><code>validate-task.ts</code><span class="chip">Logikk</span></div>
+            <div class="fdesc">
+              <p>Reglene for en oppgave: tittelen kan ikke være tom eller lengre enn 200 tegn, og fristen kan ikke være før i dag (norsk tid, <code>Europe/Oslo</code>). Den sjekker bare feltene som er med, så både <code>create</code> og <code>update</code> bruker den.</p>
+              <p class="uses">Bruker: <code>date.ts</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-validering">Inputvalidering</a><a class="k" href="#k-dry">DRY</a><a class="k" href="#k-tdd">TDD</a></div>
+            </div>
+          </div>
+          <div class="file l-logic" id="f-date">
+            <div class="fname"><code>date.ts</code><span class="chip">Logikk</span></div>
+            <div class="fdesc">
+              <p>Dato-hjelpere. <code>startOfToday</code> finner midnatt i dag i norsk tid, <code>defaultDueDate</code> gir en dato én uke frem.</p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-enhetstest">Enhetstest</a></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/features/tasks/<b>__tests__/</b></h3>
+          <p class="fnote">Tre slags tester i samme mappe, alle kjørt med <code>npm test</code> (Vitest). Fargen viser hvilket lag som testes.</p>
+          <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-testpyramiden">Testpyramiden</a><a class="k" href="#k-tdd">TDD</a></div>
+          <div class="file l-recv" id="f-test-TaskFilter">
+            <div class="fname"><code>TaskFilter.test.tsx</code><span class="chip">Komponenttest</span></div>
+            <div class="fdesc">
+              <p>Tegner <code>TaskFilter</code> i et simulert DOM og sjekker det brukeren ser. Første linje, <code>// @vitest-environment happy-dom</code>, gir akkurat denne filen et DOM; de andre testene kjører i ren Node. Testing Library finner feltene slik en bruker gjør, på ledeteksten (<code>getByLabelText("Søk")</code>), og <code>userEvent</code> skriver og velger.</p>
+              <p>Fire tester: feltene viser det som står i URL-en, tomme parametre gir «Alle», det som skrives og velges havner i skjemaet som <code>q</code> og <code>completed</code>, og «Nullstill» lenker til <code>/tasks</code>. Ingen server og ingen database trengs, for komponenten får alt den trenger som prop.</p>
+              <p class="uses">Bruker: <code>components/TaskFilter.tsx</code>, <code>@testing-library/react</code>, <code>@testing-library/user-event</code>, <code>src/test/setup-dom.ts</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-komponenttest">Komponenttest</a><a class="k" href="#k-mock">Mock, stub og spy</a></div>
+            </div>
+          </div>
+          <div class="file l-logic" id="f-test-task-service">
+            <div class="fname"><code>task-service.test.ts</code><span class="chip">Integrasjonstest</span></div>
+            <div class="fdesc">
+              <p>Kjører den ekte servicen og det ekte repositoryet mot en SQLite-database i minnet, bygget med de samme migrasjonene som appen. Tester foreløpig bare <code>list</code>: alle oppgaver, og filtrering med <code>completed</code> og <code>q</code>.</p>
+              <p class="uses">Bruker: <code>task-service.ts</code>, <code>task-repository.ts</code>, <code>better-sqlite3</code>, <code>drizzle/migrations/</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-integrasjonstest">Integrasjonstest</a><a class="k" href="#k-di">Dependency Injection</a><a class="k" href="#k-migrasjoner">Migrasjoner</a></div>
+            </div>
+          </div>
+          <div class="file l-logic" id="f-test-task-mapper">
+            <div class="fname"><code>task-mapper.test.ts</code><span class="chip">Enhetstest</span></div>
+            <div class="fdesc">
+              <p>Sjekker <code>toTaskDTO</code> helt uten database: <code>createdAt</code> blir ISO-tekst, en oppgave uten frist får <code>dueDate: null</code>, og <code>userId</code> sendes ikke ut.</p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-enhetstest">Enhetstest</a><a class="k" href="#k-dto">DTO og mappere</a></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/<b>db/</b></h3>
+          <p class="fnote">Alt om selve databasen. Ingen regler for oppgaver her, bare hvordan dataene ser ut og hvordan vi kobler til.</p>
+          <div class="file l-db" id="f-db-index">
+            <div class="fname"><code>index.ts</code><span class="chip">Database</span></div>
+            <div class="fdesc">
+              <p>Lager databaseklienten. <code>drizzle(env.DB, { relations })</code> kobler Drizzle til D1-databasen som heter <code>DB</code> i <code>wrangler.jsonc</code>. Eksporterer <code>db</code>, som repository bruker, og typen <code>DB</code>.</p>
+              <p class="uses">Bruker: <code>schema/</code>, <code>relations.ts</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-workers">Workers og bindinger</a><a class="k" href="#k-orm">ORM og skjema</a></div>
+            </div>
+          </div>
+          <div class="file l-db" id="f-relations">
+            <div class="fname"><code>relations.ts</code><span class="chip">Database</span></div>
+            <div class="fdesc">
+              <p>Forteller Drizzle hvordan tabellene henger sammen: en bruker har mange oppgaver, og en oppgave har én bruker. Gjør at <code>db.query</code> kan hente relaterte rader.</p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-relasjoner">Nøkler og relasjoner</a></div>
+            </div>
+          </div>
+          <div class="file l-db" id="f-seed">
+            <div class="fname"><code>seed.ts</code><span class="chip">Database</span></div>
+            <div class="fdesc">
+              <p>Testdata. Tømmer tabellene og legger inn brukeren «Test Testesen» med to oppgaver. Kjøres med <code>npm run seed</code>, ikke av appen selv.</p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-seeding">Seeding</a></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="folder">
+          <h3>src/db/<b>schema/</b></h3>
+          <div class="file l-db" id="f-db-task-schema">
+            <div class="fname"><code>task-schema.ts</code><span class="chip">Database</span></div>
+            <div class="fdesc">
+              <p>Beskriver <code>tasks</code>-tabellen i TypeScript: <code>id</code> (lages med nanoid), <code>title</code>, <code>completed</code>, <code>due_date</code>, <code>user_id</code> (peker på en bruker og slettes sammen med den) og <code>created_at</code>. Gir også typene <code>Task</code>, <code>CreateTask</code> og <code>UpdateTask</code> som resten av appen bruker.</p>
+              <p class="uses">Bruker: <code>user-schema.ts</code>, <code>lib/id.ts</code></p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-orm">ORM og skjema</a><a class="k" href="#k-relasjoner">Nøkler og relasjoner</a><a class="k" href="#k-typesikkerhet">Typesikkerhet</a></div>
+            </div>
+          </div>
+          <div class="file l-db" id="f-db-user-schema">
+            <div class="fname"><code>user-schema.ts</code><span class="chip">Database</span></div>
+            <div class="fdesc">
+              <p><code>users</code>-tabellen: <code>id</code> (teller oppover), <code>name</code> og <code>email</code> (må være unik). Typene <code>User</code> og <code>CreateUser</code>.</p>
+              <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-orm">ORM og skjema</a><a class="k" href="#k-relasjoner">Nøkler og relasjoner</a></div>
+            </div>
+          </div>
+          <div class="file l-db" id="f-db-schema-index">
+            <div class="fname"><code>index.ts</code><span class="chip">Database</span></div>
+            <div class="fdesc">
+              <p>Samler tabellene i én import, så andre filer kan skrive <code>import { tasks } from "@/db/schema"</code>.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="extra">
+          <p><b>Utenfor de tre mappene:</b> <code>lib/id.ts</code> lager id-er til <code>tasks</code>-tabellen. <code>lib/demo-chaos.ts</code> legger på kunstig ventetid i dev, så du rekker å se skjelett og «Lagrer…». Den lar også omtrent hver tredje sletting og avkrysning feile med vilje (<code>demoFailure</code>), så du får sett feilhåndteringen. Headeren <code>x-demo-chaos: off</code> skrur det av.</p>
+          <p><code>test/setup-dom.ts</code> laster jest-dom før testene, som gir sjekker som <code>toHaveValue</code> og <code>toHaveFormValues</code>.</p>
+          <p><code>drizzle/migrations/</code> er SQL generert fra schema-filene med <code>npm run migrate:new</code>. Det er den som faktisk lager tabellene i D1 når du kjører <code>npm run migrate:dev</code>.</p>
+          <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-relasjoner">Nøkler og relasjoner</a><a class="k" href="#k-komponenttest">Komponenttest</a><a class="k" href="#k-migrasjoner">Migrasjoner</a></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="steg" aria-labelledby="h-steg">
+    <h2 id="h-steg">En ny oppgave, steg for steg</h2>
+    <p class="intro read">Slik ser dataene ut i hvert lag når noen sender <code>POST /api/v1/tasks</code>. Legg merke til at formen endrer seg litt for hver fil.</p>
+
+    <ol class="trace">
+      <li class="l-client">
+        <div class="t-file"><code>klienten</code></div>
+        <p class="t-what">Sender en forespørsel med JSON. Det kan være <code>task-api.ts</code>, Postman eller curl.</p>
+        <pre><code>POST /api/v1/tasks
+{ "title": "  Kjøpe melk ", "dueDate": "2026-10-10" }</code></pre>
+      </li>
+      <li class="l-recv">
+        <div class="t-file"><code>task-routes.ts</code></div>
+        <p class="t-what"><code>worker.tsx</code> går gjennom rutene. Den første som passer er <code>/api/v1/tasks</code> med <code>post</code>.</p>
+        <pre><code>route("/api/v1/tasks", { post: controller.create })</code></pre>
+      </li>
+      <li class="l-recv">
+        <div class="t-file"><code>task-controller.ts</code></div>
+        <p class="t-what">Leser body. Controlleren vet ikke om dataene er gyldige, og det er heller ikke dens jobb.</p>
+        <pre><code>const body = await request.json(); // unknown
+await service.create(body);</code></pre>
+      </li>
+      <li class="l-logic">
+        <div class="t-file"><code>task-schema.ts</code></div>
+        <p class="t-what">Service kjører zod-skjemaet. Tittelen trimmes og datoteksten blir en ekte dato.</p>
+        <pre><code>{ title: "Kjøpe melk", dueDate: Date(2026-10-10) }</code></pre>
+      </li>
+      <li class="l-logic">
+        <div class="t-file"><code>validate-task.ts</code></div>
+        <p class="t-what">Reglene sjekkes: ikke tom, maks 200 tegn, frist ikke i fortiden. Så legger service til <code>userId</code> (fast 1 til innlogging er på plass).</p>
+        <pre><code>{ title: "Kjøpe melk", dueDate: Date(…), userId: 1 }</code></pre>
+      </li>
+      <li class="l-access">
+        <div class="t-file"><code>task-repository.ts</code></div>
+        <p class="t-what">Setter inn raden og ber om å få den tilbake.</p>
+        <pre><code>db.insert(tasks).values(data).returning().get()</code></pre>
+      </li>
+      <li class="l-db">
+        <div class="t-file"><code>db/ + D1</code></div>
+        <p class="t-what">Drizzle fyller inn <code>id</code> og <code>createdAt</code> fra schema-filen, D1 setter <code>completed</code> til false, og hele raden kommer tilbake.</p>
+        <pre><code>{ id: "V1StGXR8_Z5jdHi6B-myT", title: "Kjøpe melk",
+  completed: false, dueDate: Date(…), userId: 1,
+  createdAt: Date(…) }</code></pre>
+      </li>
+      <li class="l-logic">
+        <div class="t-file"><code>task-mapper.ts</code></div>
+        <p class="t-what">Raden blir en DTO. <code>userId</code> blir igjen på serveren, og <code>createdAt</code> blir tekst.</p>
+        <pre><code>{ id, title, completed: false, dueDate,
+  createdAt: "2026-10-07T10:41:25.000Z" }</code></pre>
+      </li>
+      <li class="l-recv">
+        <div class="t-file"><code>task-controller.ts</code></div>
+        <p class="t-what">Svaret pakkes inn og sendes tilbake med status 201.</p>
+        <pre><code>201 Created
+{ "ok": true, "data": { "id": "V1StGXR8_Z5jdHi6B-myT", … } }</code></pre>
+      </li>
+    </ol>
+
+    <div class="fail">
+      <div>
+        <h3>Hvis tittelen er tom</h3>
+        <p>Da stopper det i steg 5. <code>validate-task.ts</code> sier nei, service lager et feilsvar med kode <code>"400"</code>, og controlleren bruker koden som HTTP-status. Repository og databasen blir aldri spurt.</p>
+      </div>
+      <pre><code>400 Bad Request
+{ "ok": false, "error": {
+    "code": "400", "message": "Ikke gyldig data",
+    "fieldErrors": { "title": ["Tittel kan ikke være tom"] } } }</code></pre>
+    </div>
+  </section>
+
+  <section id="steg-endre" aria-labelledby="h-steg-endre">
+    <h2 id="h-steg-endre">Krysse av og slette, steg for steg</h2>
+    <p class="intro read">To endringer på samme rad, to forskjellige veier inn. Avkrysningen bruker en server action, slettingen bruker <code>fetch</code> mot REST-API-et. Fra service og ned er veien den samme.</p>
+
+    <h3 class="trace-title">Krysse av: <code>toggleTaskCompleted</code></h3>
+    <ol class="trace">
+      <li class="l-client">
+        <div class="t-file"><code>TaskItem.tsx</code></div>
+        <p class="t-what">Brukeren krysser av. <code>useTransition</code> låser boksen og viser «lagrer…» til svaret kommer.</p>
+        <pre><code>startTransition(async () =&gt; {
+  const result = await toggleTaskCompleted(id, !completed);
+  if (!result.ok) setError(result.error);
+});</code></pre>
+      </li>
+      <li class="l-recv">
+        <div class="t-file"><code>actions.ts</code></div>
+        <p class="t-what">Server action. Kjører på serveren og sender bare det ene feltet som skal endres.</p>
+        <pre><code>await service.update("V1StGXR8_Z5jdHi6B-myT",
+  { completed: true });</code></pre>
+      </li>
+      <li class="l-logic">
+        <div class="t-file"><code>task-schema.ts</code></div>
+        <p class="t-what"><code>updateTaskSchema</code> har alle felt valgfrie, så ett felt holder. Et tomt objekt stopper service selv, med 400 «Ingen felt å oppdatere».</p>
+        <pre><code>updateTaskSchema.safeParse({ completed: true })
+// { completed: true }</code></pre>
+      </li>
+      <li class="l-logic">
+        <div class="t-file"><code>validate-task.ts</code></div>
+        <p class="t-what">Samme regler som for en ny oppgave, men bare for feltene som er med. Her er verken <code>title</code> eller <code>dueDate</code> med, så alt er greit.</p>
+        <pre><code>validateTask({ completed: true })
+// { ok: true }</code></pre>
+      </li>
+      <li class="l-access">
+        <div class="t-file"><code>task-repository.ts</code></div>
+        <p class="t-what">Endrer raden og ber om å få den tilbake. Treffer ikke id-en noen rad, blir <code>data</code> <code>null</code>.</p>
+        <pre><code>db.update(tasks).set(data)
+  .where(eq(tasks.id, id)).returning().get()</code></pre>
+      </li>
+      <li class="l-logic">
+        <div class="t-file"><code>task-mapper.ts</code></div>
+        <p class="t-what">Raden blir en DTO, og svaret går tilbake gjennom <code>actions.ts</code> til <code>TaskItem</code>.</p>
+        <pre><code>{ ok: true, data: { id, title: "Kjøpe melk",
+    completed: true, dueDate, createdAt } }</code></pre>
+      </li>
+      <li class="l-client">
+        <div class="t-file"><code>TaskItem.tsx</code></div>
+        <p class="t-what">Etter en server action rendrer rwsdk siden på nytt. Raden får oppgaven som prop med ny verdi, og tittelen blir gjennomstreket.</p>
+        <pre><code>&lt;input type="checkbox" checked={completed} /&gt;
+// completed === true, fra serveren</code></pre>
+      </li>
+    </ol>
+
+    <h3 class="trace-title">Slette: <code>DELETE /api/v1/tasks/:id</code></h3>
+    <ol class="trace">
+      <li class="l-client">
+        <div class="t-file"><code>TaskItem.tsx</code></div>
+        <p class="t-what">Slett-knappen kaller <code>onDelete</code>, som raden har fått som prop fra <code>TaskList</code>.</p>
+        <pre><code>startTransition(() =&gt; onDelete(id));</code></pre>
+      </li>
+      <li class="l-client">
+        <div class="t-file"><code>task-api.ts</code></div>
+        <p class="t-what"><code>TaskList</code> kaller <code>removeTask(id)</code>, som sender forespørselen. Ingen body, id-en står i URL-en.</p>
+        <pre><code>DELETE /api/v1/tasks/V1StGXR8_Z5jdHi6B-myT</code></pre>
+      </li>
+      <li class="l-recv">
+        <div class="t-file"><code>task-routes.ts</code></div>
+        <p class="t-what">Ruten med <code>:id</code> passer, og metoden velger funksjonen i controlleren.</p>
+        <pre><code>route("/api/v1/tasks/:id", { delete: controller.remove })</code></pre>
+      </li>
+      <li class="l-recv">
+        <div class="t-file"><code>task-controller.ts</code></div>
+        <p class="t-what">Henter id-en fra URL-en og sender den videre.</p>
+        <pre><code>await service.remove(params.id);</code></pre>
+      </li>
+      <li class="l-logic">
+        <div class="t-file"><code>task-service.ts</code></div>
+        <p class="t-what">Sjekker først at oppgaven finnes. Finnes den ikke, stopper det her med 404.</p>
+        <pre><code>await repository.findById(id)
+// { ok: true, data: { id, title, … } }</code></pre>
+      </li>
+      <li class="l-access">
+        <div class="t-file"><code>task-repository.ts</code></div>
+        <p class="t-what">Sletter raden. Det er ingenting å sende tilbake.</p>
+        <pre><code>db.delete(tasks).where(eq(tasks.id, id))
+// { ok: true }</code></pre>
+      </li>
+      <li class="l-recv">
+        <div class="t-file"><code>task-controller.ts</code></div>
+        <p class="t-what">Svarer 204: det gikk bra, og svaret har ingen body.</p>
+        <pre><code>204 No Content</code></pre>
+      </li>
+      <li class="l-client">
+        <div class="t-file"><code>TaskList.tsx</code></div>
+        <p class="t-what"><code>removeTask</code> gjør 204 om til <code>{ ok: true }</code>. Da ber <code>TaskList</code> om siden på nytt, og raden er borte.</p>
+        <pre><code>await navigate(window.location.pathname, {
+  history: "replace", info: { scrollToTop: false } });</code></pre>
+      </li>
+    </ol>
+
+    <div class="fail">
+      <div>
+        <h3>Hvis oppgaven ikke finnes</h3>
+        <p>Begge veiene ender i samme svar fra service, med kode <code>"404"</code>. Ved oppdatering oppdages det etter at repository har prøvd (ingen rad kom tilbake), ved sletting før (<code>findById</code> ga <code>null</code>). Controlleren bruker koden som HTTP-status. Server action sender bare meldingen videre, og <code>TaskItem</code> viser den under raden.</p>
+      </div>
+      <pre><code>404 Not Found
+{ "ok": false, "error": {
+    "code": "404", "message": "Task finnes ikke",
+    "fieldErrors": {} } }</code></pre>
+    </div>
+  </section>
+
+  <section id="monstre" aria-labelledby="h-monstre">
+    <h2 id="h-monstre">To mønstre som går igjen</h2>
+    <p class="intro read">Når du har skjønt disse to, kan du lese alle filene i <code>features/tasks/</code>.</p>
+    <div class="pair">
+      <div class="panel">
+        <h3>Hvert lag får laget under seg som argument</h3>
+        <p>Nederst i hver fil lages laget med en <code>create…</code>-funksjon, og laget under sendes inn:</p>
+<pre><code><span class="cm">// task-repository.ts</span>
+export const repository = createTaskRepository(db);
+<span class="cm">// task-service.ts</span>
+export const service = createTaskService(repository);
+<span class="cm">// task-controller.ts</span>
+export const controller = createTaskController(service);</code></pre>
+        <p>I appen sendes den ekte D1-databasen inn. I testene sendes en SQLite-database i minnet inn i stedet. Service-koden er helt lik, så testene sjekker de ekte reglene uten Cloudflare.</p>
+<pre><code><span class="cm">// __tests__/task-service.test.ts</span>
+db = drizzle({ client: new Database(":memory:"), relations });
+service = createTaskService(createTaskRepository(db));</code></pre>
+        <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-di">Dependency Injection</a><a class="k" href="#k-repository">Repository-mønsteret</a><a class="k" href="#k-integrasjonstest">Integrasjonstest</a></div>
+      </div>
+      <div class="panel">
+        <h3>Alle lag svarer med samme form</h3>
+        <p>Ingen lag kaster feil oppover. Alle svarer med enten suksess eller en beskrevet feil:</p>
+<pre><code>| { ok: true;  data: TaskDTO }
+| { ok: false; error: {
+      code: "400" | "404" | "500";
+      message: string;
+      fieldErrors: Record&lt;string, string[]&gt; } }</code></pre>
+        <p>Repository fanger databasefeil og gir <code>"500"</code>. Service gir <code>"400"</code> for ugyldig input og <code>"404"</code> når oppgaven ikke finnes. Controlleren gjør <code>code</code> om til HTTP-status, mens <code>TasksPage</code>, skjemaet og <code>TaskItem</code> viser <code>message</code> og <code>fieldErrors</code> til brukeren.</p>
+        <p>Sletting har ingenting å sende tilbake. Da er suksess bare <code>{ ok: true }</code>, uten <code>data</code>.</p>
+        <p>Hvert lag sjekker <code>if (!result.ok) return result;</code> og sender feilen videre uendret.</p>
+        <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-result">Result-mønsteret</a><a class="k" href="#k-statuskoder">Statuskoder</a><a class="k" href="#k-typesikkerhet">Typesikkerhet</a></div>
+      </div>
+    </div>
+
+    <div class="todo">
+      <h3>Ikke ferdig ennå</h3>
+      <ul>
+        <li><code>action</code> (<code>POST /api/v1/tasks/:id/:action</code>) finnes i rutene, men controlleren returnerer bare <code>null</code>. Planen står som kommentar i <code>task-controller.ts</code>: sjekk handlingen (<code>complete</code>, <code>reopen</code>) og kall <code>service.update</code>.</li>
+        <li>En feil ved sletting vises ikke for brukeren ennå. <code>onDelete</code> i <code>TaskList</code> stopper bare når <code>removeTask</code> svarer <code>ok: false</code>.</li>
+        <li><code>task-api.ts</code> har ingen <code>updateTask</code>. <code>PATCH /api/v1/tasks/:id</code> er koblet til <code>service.update</code>, men appen bruker den ikke selv; avkrysningen går via server action.</li>
+        <li><code>update</code>, <code>remove</code> og <code>findById</code> har ingen tester ennå. <code>task-service.test.ts</code> dekker bare <code>list</code>.</li>
+        <li><code>userId</code> er fast satt til 1 til innlogging er på plass.</li>
+      </ul>
+      <div class="kc"><span class="kc-l">Teori</span><a class="k" href="#k-make-it-work">Make it work</a><a class="k" href="#k-tdd">TDD</a></div>
+    </div>
+  </section>
+
+  <section id="teori" aria-labelledby="h-teori">
+    <h2 id="h-teori">Teorien bak</h2>
+    <p class="intro read">Begrepene appen bygger på, tema for tema. Alt er hentet fra kursene Webapp 2025 og Webapp 2026 på Fullstækk. Webapp 2025 er hovedkurset. Webapp 2026 viser de samme ideene i en annen eksempelapp og legger til testing og KI. Eksempelappene har andre navn på filer og tabeller enn tasks-appen, men ideene er de samme. Åpne et begrep for å se hva det er, hvor det brukes her, og hvilken leksjon som går i dybden.</p>
+    <div class="themes">
+      <div class="theme">
+        <h3>Web og HTTP</h3>
+        <p class="tnote">Det som skjer før en forespørsel når <code>features/tasks/</code>.</p>
+        <details class="concept" id="k-http">
+          <summary><span class="c-name">Request og response (HTTP)</span><span class="c-gist">Nettleseren sender en request, serveren svarer med en response.</span></summary>
+          <div class="c-body">
+            <p>Hele weben bygger på HTTP. En request har en URL, en HTTP-metode og headere. En response har en statuskode, headere og en body med innholdet: HTML, JSON eller noe annet. En dynamisk webapp lager svaret ut fra hvem som spør og hva de spør om.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-worker"><code>worker.tsx</code></a> eksporterer <code>fetch</code>: én funksjon som får en <code>Request</code> og gir tilbake en <code>Response</code>. <a href="#f-task-controller"><code>task-controller.ts</code></a> leser <code>Request</code> og lager <code>Response</code> for hånd. Sidene svarer med HTML, API-et med JSON.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/introduksjon" target="_blank" rel="noopener">Webapp 2026 · L1 Introduksjon</a><span>: «Hva er en webapplikasjon?»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/moderne-webutvikling" target="_blank" rel="noopener">Webapp 2025 · L3 Moderne webutviklingsverktøy</a><span>: «HTTP og Request-Response kommunikasjon»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/rest-api-prinsipper" target="_blank" rel="noopener">Webapp 2025 · L15 REST API-teori og arkitektur-prinsipper</a><span>: «Request-Response syklusen i detalj»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-http-metoder">HTTP-metoder</a><a class="k" href="#k-statuskoder">Statuskoder</a><a class="k" href="#k-ruting">Ruting</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-ruting">
+          <summary><span class="c-name">Ruting</span><span class="c-gist">En rute kobler en URL til koden som skal svare.</span></summary>
+          <div class="c-body">
+            <p><code>route</code> tar et mønster og en handler. Mønsteret kan være fast (<code>/tasks</code>), ha en parameter (<code>/tasks/:id</code>) eller være et wildcard (<code>/*</code>). Rutene prøves i rekkefølgen de står, så spesifikke ruter må stå før generelle.</p>
+            <p>Flere HTTP-metoder på samme sti samles i én <code>route</code>. Står stien to ganger, svarer den første 405, og den andre blir aldri prøvd. <code>render(Document, [...])</code> legger HTML-skallet rundt sidene.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-worker"><code>worker.tsx</code></a> lister alt i rekkefølge: API-rutene først, så sidene inni <code>render(Document, …)</code>. <a href="#f-task-routes"><code>task-routes.ts</code></a> har én <code>route</code> per sti, med metodene samlet (<code>get</code>, <code>post</code>, <code>patch</code>, <code>delete</code>) og <code>:id</code> som parameter.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/introduksjon" target="_blank" rel="noopener">Webapp 2026 · L1 Introduksjon</a><span>: «Routing-mønstre»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/backend-utvikling" target="_blank" rel="noopener">Webapp 2026 · L3 Backend med RedwoodSDK</a><span>: «Ruter og mønstre», «HTTP-metodebasert routing»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-http">Request og response</a><a class="k" href="#k-middleware">Middleware</a><a class="k" href="#k-url-design">URL-design</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-middleware">
+          <summary><span class="c-name">Middleware</span><span class="c-gist">Felles kode som kjører før rutene, i rekkefølge.</span></summary>
+          <div class="c-body">
+            <p>Middleware er logikk mange ruter trenger, skrevet ett sted i stedet for i hver handler. Den står øverst i <code>defineApp</code> og kjører for alle forespørsler, ovenfra og ned, så rekkefølgen betyr noe.</p>
+            <p>En interruptor er det samme for én rute: en liste med funksjoner foran handleren. Returnerer en av dem en <code>Response</code>, stopper kjeden der.</p>
+            <h4>I denne appen</h4>
+            <p><code>setCommonHeaders()</code> står først i <a href="#f-worker"><code>worker.tsx</code></a> og setter felles headere på alle svar. I <a href="#f-task-routes"><code>task-routes.ts</code></a> står handlerne i lister, som er formen en interruptor bruker.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/backend-utvikling" target="_blank" rel="noopener">Webapp 2026 · L3 Backend med RedwoodSDK</a><span>: «Middleware og kontekst (ctx)», «Interruptors: sjekk på én rute»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-ruting">Ruting</a><a class="k" href="#k-http">Request og response</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-workers">
+          <summary><span class="c-name">Cloudflare Workers og bindinger</span><span class="c-gist">Serverkoden er én funksjon som kjører per forespørsel, uten minne imellom.</span></summary>
+          <div class="c-body">
+            <p>En worker er serverkoden pakket som én funksjon: <code>Request</code> inn, <code>Response</code> ut. Det står ingen server og venter mellom forespørslene. To ting følger av det. Ingenting huskes fra én forespørsel til den neste, så alt som skal vare, må lagres et sted. Og miljøet er ikke Node: Workers har de samme API-ene som nettleseren (<code>fetch</code>, <code>Request</code>, <code>Response</code>).</p>
+            <p>En binding er koblingen fra koden til en Cloudflare-tjeneste, satt opp i <code>wrangler.jsonc</code>. D1 er Cloudflares SQLite-database.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-worker"><code>worker.tsx</code></a> er workeren. <a href="#f-db-index"><code>db/index.ts</code></a> bruker bindingen <code>env.DB</code> for å nå D1. Derfor ligger oppgavene i databasen og ikke i en variabel i koden.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/introduksjon" target="_blank" rel="noopener">Webapp 2026 · L1 Introduksjon</a><span>: «Cloudflare Workers: serveren på kanten av nettet»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/database" target="_blank" rel="noopener">Webapp 2026 · L8 Database</a><span>: «Databasetilkobling»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-http">Request og response</a><a class="k" href="#k-orm">ORM og skjema</a></div>
+          </div>
+        </details>
+      </div>
+      <div class="theme">
+        <h3>REST-API</h3>
+        <p class="tnote">Kontrakten mellom en klient og serveren.</p>
+        <details class="concept" id="k-rest">
+          <summary><span class="c-name">REST</span><span class="c-gist">Ressursen står i URL-en, HTTP-metoden sier hva du vil gjøre med den.</span></summary>
+          <div class="c-body">
+            <p>REST er en arkitektonisk stil for API-er, ikke en teknologi. Kjernen er et ensartet grensesnitt: et verb (HTTP-metoden) og en ressurs (her: oppgaver). Lærer du én del av API-et, forstår du resten.</p>
+            <p>Hver forespørsel er selvstendig (stateless): den inneholder alt serveren trenger, og serveren husker ikke forrige kall. Klient og server er adskilt og snakker bare sammen gjennom API-et. REST passer når CRUD dominerer og flere klienter skal bruke det samme API-et.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-task-routes"><code>task-routes.ts</code></a> er hele REST-flaten: ressursen <code>tasks</code> under <code>/api/v1/tasks</code>, og metoden velger funksjon i <a href="#f-task-controller"><code>task-controller.ts</code></a>. <a href="#f-task-api"><code>task-api.ts</code></a> er én klient, men Postman og curl kan bruke det samme API-et.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/rest-api-prinsipper" target="_blank" rel="noopener">Webapp 2025 · L15 REST API-teori og arkitektur-prinsipper</a><span>: «De seks REST-prinsippene», «Når velge REST versus alternativer»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/backend-utvikling" target="_blank" rel="noopener">Webapp 2026 · L3 Backend med RedwoodSDK</a><span>: «HTTP-metodebasert routing»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-http-metoder">HTTP-metoder</a><a class="k" href="#k-statuskoder">Statuskoder</a><a class="k" href="#k-url-design">URL-design</a><a class="k" href="#k-server-actions">Server actions</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-http-metoder">
+          <summary><span class="c-name">HTTP-metoder</span><span class="c-gist">GET henter, POST oppretter, PATCH endrer litt, DELETE sletter.</span></summary>
+          <div class="c-body">
+            <p>Metodene er ikke bare teknikk, de sier hva klienten vil. GET henter data, også med søk og filtrering, og endrer ingenting. POST oppretter en ny ressurs der serveren lager id-en. PUT erstatter hele ressursen, PATCH oppdaterer deler av den. DELETE sletter.</p>
+            <p>GET og PUT er idempotente: samme kall flere ganger gir samme resultat. POST er det ikke: to kall gir to ressurser.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-task-routes"><code>task-routes.ts</code></a>: <code>GET</code> lister og henter, <code>POST</code> oppretter, <code>PATCH</code> endrer bare feltene som sendes, <code>DELETE</code> sletter. <a href="#f-task-api"><code>task-api.ts</code></a> sender de samme metodene med <code>fetch</code>. <a href="#f-TaskFilter"><code>TaskFilter.tsx</code></a> bruker <code>GET</code> fordi et søk bare leser.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/rest-api-prinsipper" target="_blank" rel="noopener">Webapp 2025 · L15 REST API-teori og arkitektur-prinsipper</a><span>: «HTTP-metoder og semantisk betydning»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/moderne-webutvikling" target="_blank" rel="noopener">Webapp 2025 · L3 Moderne webutviklingsverktøy</a><span>: «HTTP-metodene»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-rest">REST</a><a class="k" href="#k-statuskoder">Statuskoder</a><a class="k" href="#k-query-parametre">Query-parametre</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-statuskoder">
+          <summary><span class="c-name">Statuskoder</span><span class="c-gist">Tallet i svaret som sier hvordan det gikk.</span></summary>
+          <div class="c-body">
+            <p>Første siffer er familien: 2xx gikk bra, 4xx klienten gjorde noe feil, 5xx serveren gjorde noe feil. Skillet er viktig: etter en 4xx gir samme forespørsel samme feil igjen.</p>
+            <p>200 er vanlig suksess, 201 betyr at noe ble opprettet, 204 at det gikk bra uten noe å sende tilbake. 400 er ugyldig input, 404 at ressursen ikke finnes, 500 en ukjent serverfeil.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-task-controller"><code>task-controller.ts</code></a> velger koden: 200 for liste, én oppgave og oppdatering, 201 for ny oppgave, 204 uten body for sletting. Feil får koden service eller repository satte: 400, 404 eller 500. Webapp 2025 bruker 400 for valideringsfeil, slik appen gjør. Webapp 2026 nevner også 422 for data som er lest, men bryter en regel.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/rest-api-prinsipper" target="_blank" rel="noopener">Webapp 2025 · L15 REST API-teori og arkitektur-prinsipper</a><span>: «HTTP status codes som kommunikasjon»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/introduksjon" target="_blank" rel="noopener">Webapp 2026 · L1 Introduksjon</a><span>: «Hva er en webapplikasjon?»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-result">Result-mønsteret</a><a class="k" href="#k-http-metoder">HTTP-metoder</a><a class="k" href="#k-http">Request og response</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-url-design">
+          <summary><span class="c-name">URL-design og versjonering</span><span class="c-gist">Gode URL-er er selvforklarende og følger faste konvensjoner.</span></summary>
+          <div class="c-body">
+            <p>Ressurser navngis med substantiv i flertall, uten verb i stien, og en enkelt ressurs får id-en bak: <code>/api/questions</code> og <code>/api/questions/123</code>. Versjonen kan stå i URL-en (<code>/api/v1/…</code>), som er den vanligste måten, slik at API-et kan endres uten å knekke gamle klienter.</p>
+            <p>Operasjoner som ikke passer i CRUD, løses som en handling på ressursen: substantiv + verb med <code>POST</code>, som <code>/api/questions/123/publish</code>.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-task-routes"><code>task-routes.ts</code></a>: <code>/api/v1/tasks</code> er samlingen, <code>/api/v1/tasks/:id</code> er én oppgave, og <code>/api/v1/tasks/:id/:action</code> er plassen for handlinger som <code>complete</code> og <code>reopen</code> (ikke ferdig ennå).</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/rest-api-prinsipper" target="_blank" rel="noopener">Webapp 2025 · L15 REST API-teori og arkitektur-prinsipper</a><span>: «URL design patterns», «API Versjonering», «Actions og non-CRUD operasjoner i REST»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-rest">REST</a><a class="k" href="#k-ruting">Ruting</a><a class="k" href="#k-query-parametre">Query-parametre</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-query-parametre">
+          <summary><span class="c-name">Query-parametre</span><span class="c-gist">Søk og filter står i URL-en etter spørsmålstegnet.</span></summary>
+          <div class="c-body">
+            <p>Filtrering og søk er lesing, og hører hjemme i en <code>GET</code> med query-parametre, som <code>/api/questions?search=javascript</code>. De leses med plattformens egne verktøy, <code>URL</code> og <code>URLSearchParams</code>, de samme som i nettleseren.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-parse-params"><code>parse-params.ts</code></a> leser <code>?q=…&amp;completed=…</code> fra requesten. Verdiene er fortsatt tekst, så <a href="#f-validate-list-params"><code>validate-list-params.ts</code></a> sjekker dem og gjør dem om. Både <a href="#f-TasksPage"><code>TasksPage.tsx</code></a> og <a href="#f-task-controller"><code>task-controller.ts</code></a> går denne veien, og <a href="#f-TaskFilter"><code>TaskFilter.tsx</code></a> lager URL-en.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/backend-utvikling" target="_blank" rel="noopener">Webapp 2026 · L3 Backend med RedwoodSDK</a><span>: «Query-parametere»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/rest-api-prinsipper" target="_blank" rel="noopener">Webapp 2025 · L15 REST API-teori og arkitektur-prinsipper</a><span>: «GET - Henting av data», «Ressurs-hierarki»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-http-metoder">HTTP-metoder</a><a class="k" href="#k-validering">Inputvalidering</a><a class="k" href="#k-progressive-enhancement">Progressive enhancement</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-api-klient">
+          <summary><span class="c-name">API-klient</span><span class="c-gist">All <code>fetch</code> mot API-et samlet i ett lag.</span></summary>
+          <div class="c-body">
+            <p>Når hver komponent skriver sin egen <code>fetch</code>, får du duplisert kode, ulik feilhåndtering og mange steder å endre. Et API-bibliotek er et oversettelseslag mellom appen og serveren: funksjoner som komponentene kaller, uten å kjenne URL-ene.</p>
+            <p>Laget fanger feilene der kallet skjer og svarer med et Result. Da trenger UI-koden bare å sjekke om det gikk bra.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-task-api"><code>task-api.ts</code></a> har <code>listTasks()</code>, <code>createTask()</code> og <code>removeTask(id)</code>. Svarer ikke serveren, gir de tilbake <code>{ ok: false }</code> i stedet for å kaste. <a href="#f-TasksPageClient"><code>TasksPageClient.tsx</code></a> og <a href="#f-TaskList"><code>TaskList.tsx</code></a> kaller funksjonene og vet ingenting om URL-er.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/api-bibliotek" target="_blank" rel="noopener">Webapp 2025 · L12 API-bibliotek</a><span>: teoridelen</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/fetch-arkitektur" target="_blank" rel="noopener">Webapp 2025 · L13 Fetch med arkitektur</a><span>: «Abstraksjoner»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/result-pattern-avansert" target="_blank" rel="noopener">Webapp 2025 · L13a Result Pattern og clientFactory</a><span>: «Fordeler med Result Pattern»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-result">Result-mønsteret</a><a class="k" href="#k-datahenting">Datahenting</a><a class="k" href="#k-dry">DRY</a></div>
+          </div>
+        </details>
+      </div>
+      <div class="theme">
+        <h3>Arkitektur og lag</h3>
+        <p class="tnote">Hvordan serverkoden er delt opp, og hvorfor.</p>
+        <details class="concept" id="k-n-lag">
+          <summary><span class="c-name">N-lags arkitektur</span><span class="c-gist">Koden deles i lag med hvert sitt ansvar, og hvert lag snakker bare med laget under.</span></summary>
+          <div class="c-body">
+            <p>Lagene i en webapp er vanligvis controller (HTTP inn og ut), service (forretningslogikk og regler), repository (databaseoperasjoner) og databasen selv. Avhengigheten går én vei: øvre lag bruker nedre lag, aldri omvendt.</p>
+            <p>Gevinsten er at hvert lag kan testes for seg, at en endring i ett lag ikke sprer seg, og at servicen kan brukes av flere innganger: REST-API, server actions og sider.</p>
+            <p>Kurset sier også når det ikke lønner seg: en enkel CRUD-app uten særlig logikk trenger ikke nødvendigvis lagene. Webapp 2026 kaller databasen rett fra server actions for å holde eksemplene korte.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-task-controller"><code>task-controller.ts</code></a> → <a href="#f-task-service"><code>task-service.ts</code></a> → <a href="#f-task-repository"><code>task-repository.ts</code></a> → <a href="#f-db-index"><code>db/index.ts</code></a>. Controlleren vet ingenting om databasen, og servicen vet ingenting om HTTP. Derfor kan <a href="#f-actions"><code>actions.ts</code></a> og <a href="#f-TasksPage"><code>TasksPage.tsx</code></a> kalle samme service som API-et.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/service-controller-n-layer" target="_blank" rel="noopener">Webapp 2025 · L17 Service og Controller Separation med N-Layer Arkitektur</a><span>: «Teoretisk bakgrunn: N-Layer Arkitektur», «Når er N-Layer Arkitektur passende?»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/database" target="_blank" rel="noopener">Webapp 2026 · L8 Database</a><span>: «CRUD-operasjoner» (boksen «Rett på databasen, eller lag på lag?»)</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-soc">Separation of Concerns</a><a class="k" href="#k-repository">Repository-mønsteret</a><a class="k" href="#k-di">Dependency Injection</a><a class="k" href="#k-dto">DTO og mappere</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-repository">
+          <summary><span class="c-name">Repository-mønsteret</span><span class="c-gist">Ett lag eier all databasekode.</span></summary>
+          <div class="c-body">
+            <p>Uten et eget lag lekker database-importer og spørringer ut i hele kodebasen, og da blir vedlikehold og endringer vanskelige. Repository-mønsteret isolerer databaselogikken bak et abstraksjonslag mellom datamodellen og forretningslogikken.</p>
+            <p>Laget lages med en factory-funksjon som får databasen inn som argument, så en test kan sende inn en annen database. Prisen er et ekstra lag. Kurset starter derfor enkelt og legger på abstraksjonen når behovet kommer.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-task-repository"><code>task-repository.ts</code></a> er det eneste stedet i <code>features/tasks/</code> som importerer <code>db</code>. <code>createTaskRepository(db)</code> er factory-funksjonen, og <code>TaskRepository</code> er kontrakten <a href="#f-task-service"><code>task-service.ts</code></a> kjenner.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/database-drizzle-zod" target="_blank" rel="noopener">Webapp 2025 · L16 Database Integration med Drizzle og Zod</a><span>: «Repository Pattern»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/utilities-repository-avansert" target="_blank" rel="noopener">Webapp 2025 · L16a Database Utilities og forbedret Repository</a><span>: «Repository Pattern Trade-offs»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-n-lag">N-lags arkitektur</a><a class="k" href="#k-di">Dependency Injection</a><a class="k" href="#k-orm">ORM og skjema</a><a class="k" href="#k-sql-injection">Parameteriserte spørringer</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-di">
+          <summary><span class="c-name">Dependency Injection</span><span class="c-gist">Et lag lager ikke avhengighetene sine selv, det får dem levert utenfra.</span></summary>
+          <div class="c-body">
+            <p>Prinsippet gjør koden testbar og fleksibel: det som sendes inn, kan byttes ut. Kurset bruker det først på komponenter, som får data som props i stedet for å hente dem selv.</p>
+            <p>I backend gjøres det med factory-funksjoner: servicen lages med repositoryet som parameter. I en test sendes en annen database inn, og resten av koden er uendret. En DI-container som løser avhengighetene automatisk finnes, men er sjelden nødvendig i små og mellomstore apper.</p>
+            <h4>I denne appen</h4>
+            <p>Nederst i hver fil: <code>createTaskRepository(db)</code>, <code>createTaskService(repository)</code> og <code>createTaskController(service)</code>. <a href="#f-test-task-service"><code>task-service.test.ts</code></a> bygger samme kjede med SQLite i minnet. På komponentnivå får <a href="#f-TaskFilter"><code>TaskFilter.tsx</code></a> <code>params</code> og <a href="#f-CreateTaskForm"><code>CreateTaskForm.tsx</code></a> <code>action</code> som prop.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/data-separasjon" target="_blank" rel="noopener">Webapp 2025 · L9 Data-separasjon</a><span>: teoridelen (Dependency Injection-prinsippet)</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/database-drizzle-zod" target="_blank" rel="noopener">Webapp 2025 · L16 Database Integration med Drizzle og Zod</a><span>: «Repository Pattern» (factory pattern)</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/service-controller-n-layer" target="_blank" rel="noopener">Webapp 2025 · L17 Service og Controller Separation med N-Layer Arkitektur</a><span>: «Avansert: DI - containere»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/fullstack-testing" target="_blank" rel="noopener">Webapp 2026 · L8a Fullstack-testing</a><span>: «3.2 Hvorfor mocke databasen?»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-repository">Repository-mønsteret</a><a class="k" href="#k-integrasjonstest">Integrasjonstest</a><a class="k" href="#k-props">Props og komposisjon</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-result">
+          <summary><span class="c-name">Result-mønsteret</span><span class="c-gist">En forventet feil er en verdi som returneres, ikke et unntak som kastes.</span></summary>
+          <div class="c-body">
+            <p>Med <code>try/catch</code> er feilen usynlig i funksjonens signatur, og den som kaller, må huske å fange den. Result-mønsteret returnerer i stedet ett av to objekter: suksess med data, eller feil med en beskrivelse. Typen er en diskriminert union, så TypeScript slipper deg ikke til <code>data</code> før du har sjekket hvilken gren du er i.</p>
+            <p>Webapp 2025 skriver <code>{ success: true, data }</code>, Webapp 2026 skriver <code>{ ok: true }</code>. Ideen er den samme. Regelen fra kurset: skal brukeren lese og rette feilen selv (tomt felt, finnes ikke), returneres den. Uventede feil, som en bug, kan fortsatt kastes.</p>
+            <h4>I denne appen</h4>
+            <p>Alle lag i <code>features/tasks/</code> svarer <code>{ ok: true, data }</code> eller <code>{ ok: false, error }</code>. <a href="#f-task-repository"><code>task-repository.ts</code></a> fanger databasefeil med <code>try/catch</code> på ett sted og gjør dem om til en verdi. <a href="#f-task-controller"><code>task-controller.ts</code></a> gjør <code>error.code</code> om til statuskode, og <a href="#f-CreateTaskForm"><code>CreateTaskForm.tsx</code></a> og <a href="#f-TaskItem"><code>TaskItem.tsx</code></a> viser meldingen.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/fetch-arkitektur" target="_blank" rel="noopener">Webapp 2025 · L13 Fetch med arkitektur</a><span>: «Feilhåndtering — try/catch eller Result?»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/result-pattern-avansert" target="_blank" rel="noopener">Webapp 2025 · L13a Result Pattern og clientFactory</a><span>: «Diskriminert union i praksis»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/backend-utvikling" target="_blank" rel="noopener">Webapp 2026 · L3 Backend med RedwoodSDK</a><span>: «Først et kart: hvilken feilform brukes hvor», «Server functions»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/full-stack-integrasjon" target="_blank" rel="noopener">Webapp 2026 · L10 Full-stack-integrasjon og deploy</a><span>: «Feilhåndtering på tvers av stacken»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-statuskoder">Statuskoder</a><a class="k" href="#k-useactionstate">useActionState</a><a class="k" href="#k-typesikkerhet">Typesikkerhet</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-dto">
+          <summary><span class="c-name">DTO og mappere</span><span class="c-gist">Klienten får en egen form på dataene, ikke databaseraden.</span></summary>
+          <div class="c-body">
+            <p>Sender du databasemodellen rett ut, kan sensitive felt lekke, og API-et endrer seg hver gang tabellen gjør det. En DTO (Data Transfer Object) bestemmer nøyaktig hvilke data som går over nettverket. Den er API-kontrakten, uten logikk. En mapper er funksjonen som gjør om fra én form til en annen.</p>
+            <p>Kurset kaller dette et Anti-Corruption Layer: et beskyttende lag mellom interne modeller og det klientene ser. Mapperen ligger i service-laget, så alle innganger får samme form.</p>
+            <h4>I denne appen</h4>
+            <p><code>toTaskDTO</code> i <a href="#f-task-mapper"><code>task-mapper.ts</code></a> lar <code>userId</code> bli igjen på serveren og gjør <code>createdAt</code> om til tekst. <a href="#f-task-service"><code>task-service.ts</code></a> kaller mapperen før noe sendes oppover. Typen <code>TaskDTO</code> er det komponentene kjenner.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/mappers-dto" target="_blank" rel="noopener">Webapp 2025 · L18 Mappers og DTO</a><span>: «Problemet med direkte modell-eksponering», «DTO», «Anti-Corruption Layer Pattern»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-n-lag">N-lags arkitektur</a><a class="k" href="#k-typesikkerhet">Typesikkerhet</a><a class="k" href="#k-validering">Inputvalidering</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-validering">
+          <summary><span class="c-name">Inputvalidering med Zod</span><span class="c-gist">Alt som kommer utenfra, sjekkes på serveren før det brukes.</span></summary>
+          <div class="c-body">
+            <p>Zod er et bibliotek for validering: du beskriver formen på dataene i et skjema, Zod avviser det som ikke passer, og du får TypeScript-typene med på kjøpet. TypeScript sjekker bare koden mens du skriver. Det som kommer inn når appen kjører, må sjekkes da.</p>
+            <p>Validering kan skje to steder: i klienten for rask tilbakemelding, og på serveren for sikkerhet. Klienten kan alltid omgås, så det er servervalideringen som teller. Data på vei inn må ofte også gjøres om, for eksempel en datotekst til en <code>Date</code>.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-task-schema"><code>task-schema.ts</code></a> sjekker formen med Zod, og <code>safeParse</code> gir et svar i stedet for å kaste. <a href="#f-validate-task"><code>validate-task.ts</code></a> har reglene (lengde på tittel, frist ikke i fortiden), og <a href="#f-validate-list-params"><code>validate-list-params.ts</code></a> sjekker listeparametrene. Alt kjøres fra <a href="#f-task-service"><code>task-service.ts</code></a>, så reglene gjelder likt for API-et og skjemaet.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/sikkerhet-webapplikasjoner" target="_blank" rel="noopener">Webapp 2026 · L13 Sikkerhet for webapplikasjoner</a><span>: «Input-validering med Zod»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/database-drizzle-zod" target="_blank" rel="noopener">Webapp 2025 · L16 Database Integration med Drizzle og Zod</a><span>: «Tekniske valg og alternativer» (Zod for runtime validering)</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/mappers-dto" target="_blank" rel="noopener">Webapp 2025 · L18 Mappers og DTO</a><span>: «Transformering av data til database»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-typesikkerhet">Typesikkerhet</a><a class="k" href="#k-query-parametre">Query-parametre</a><a class="k" href="#k-tdd">TDD</a><a class="k" href="#k-sql-injection">Parameteriserte spørringer</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-features">
+          <summary><span class="c-name">Features-basert struktur</span><span class="c-gist">All kode som hører til én funksjon, bor i samme mappe.</span></summary>
+          <div class="c-body">
+            <p>I stedet for mapper per filtype samles alt som hører til en feature: komponenter, API-funksjoner, typer og logikk. Da finner du alt på ett sted, kan jobbe med én feature isolert, og legge til nye uten å forstyrre de gamle. Strukturen lønner seg mer jo større appen og teamet blir.</p>
+            <h4>I denne appen</h4>
+            <p><code>features/tasks/</code> har alt om oppgaver, fra <a href="#f-task-routes"><code>task-routes.ts</code></a> til komponentene og testene. <code>db/</code> og <code>lib/</code> er delt mellom features.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/fetch-arkitektur" target="_blank" rel="noopener">Webapp 2025 · L13 Fetch med arkitektur</a><span>: «Features-Based struktur»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-soc">Separation of Concerns</a><a class="k" href="#k-n-lag">N-lags arkitektur</a></div>
+          </div>
+        </details>
+      </div>
+      <div class="theme">
+        <h3>React på serveren og i nettleseren</h3>
+        <p class="tnote">Hva som kjører hvor, og hvordan komponentene snakker sammen.</p>
+        <details class="concept" id="k-rsc">
+          <summary><span class="c-name">Server- og klientkomponenter</span><span class="c-gist">Komponenter kjører på serveren som standard. <code>"use client"</code> sender dem også til nettleseren.</span></summary>
+          <div class="c-body">
+            <p>En serverkomponent kjøres ferdig på serveren, og nettleseren får bare resultatet som HTML. Den kan bruke <code>async/await</code> og hente data direkte, men ikke hooks eller klikk-hendelser. En klientkomponent sendes i tillegg som JavaScript og hydreres i nettleseren, så den kan reagere på klikk og huske tilstand.</p>
+            <p><code>"use client"</code> er et fildirektiv: alt filen eksporterer og importerer, blir klientkode. En serverkomponent kan rendre en klientkomponent, men ikke omvendt. Regelen: bruk serverkomponenter så lenge du kan.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-TasksPage"><code>TasksPage.tsx</code></a> og <a href="#f-TaskFilter"><code>TaskFilter.tsx</code></a> er serverkomponenter. <a href="#f-TaskList"><code>TaskList.tsx</code></a>, <a href="#f-CreateTaskForm"><code>CreateTaskForm.tsx</code></a> og <a href="#f-TasksPageClient"><code>TasksPageClient.tsx</code></a> starter med <code>"use client"</code>. <a href="#f-TaskItem"><code>TaskItem.tsx</code></a> har ikke direktivet, men blir klientkode fordi <a href="#f-TaskList"><code>TaskList.tsx</code></a> importerer den.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/introduksjon" target="_blank" rel="noopener">Webapp 2026 · L1 Introduksjon</a><span>: «React Server Components (RSC)»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/frontend-react" target="_blank" rel="noopener">Webapp 2026 · L5 Frontend med React</a><span>: «3.1 Server- og klientkomponenter»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/server-actions-forms" target="_blank" rel="noopener">Webapp 2025 · L19 Server Actions og forms med useActionState</a><span>: «React Server Components (RSC) og Client Components», «"use server" og "use client" Directives»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-datahenting">Datahenting</a><a class="k" href="#k-server-actions">Server actions</a><a class="k" href="#k-suspense">Suspense</a><a class="k" href="#k-state">State</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-datahenting">
+          <summary><span class="c-name">Datahenting: på serveren eller i nettleseren</span><span class="c-gist">To måter å få data inn i en side på.</span></summary>
+          <div class="c-body">
+            <p>I en SPA kommer siden tom, og JavaScript henter data som JSON fra et API etterpå, typisk med <code>useEffect</code> og <code>fetch</code>. Da må komponenten selv holde styr på lasting og feil.</p>
+            <p>Med serverkomponenter henter siden dataene direkte på serveren og sender ferdig HTML: rask første lasting og mindre JavaScript. Webapp 2026 sier det rett ut: i React 19 trenger du ikke <code>useEffect</code> for datahenting. KI-verktøy foreslår likevel ofte det gamle mønsteret.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-TasksPage"><code>TasksPage.tsx</code></a> kaller <code>service.list()</code> rett fra serveren, uten <code>fetch</code>. <a href="#f-TasksPageClient"><code>TasksPageClient.tsx</code></a> viser den andre måten: <code>useEffect</code> kaller <a href="#f-task-api"><code>task-api.ts</code></a>, som går en ekstra runde gjennom REST-API-et. Sammenlign de to veiene i <a href="#kart">kartet</a>.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/moderne-webutvikling" target="_blank" rel="noopener">Webapp 2025 · L3 Moderne webutviklingsverktøy</a><span>: «Evolusjon av webapplikasjoner», «4.4 Sammenligning av paradigmene»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/react-fundamentals" target="_blank" rel="noopener">Webapp 2025 · L5 React fundamentals</a><span>: «API-kall med useEffect»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/frontend-react" target="_blank" rel="noopener">Webapp 2026 · L5 Frontend med React</a><span>: «3.2 React Hooks: useState og useTransition»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-rsc">Server- og klientkomponenter</a><a class="k" href="#k-suspense">Suspense</a><a class="k" href="#k-api-klient">API-klient</a><a class="k" href="#k-state">State</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-suspense">
+          <summary><span class="c-name">Suspense</span><span class="c-gist">Vis noe annet mens en del av siden venter på data.</span></summary>
+          <div class="c-body">
+            <p>Suspense håndterer lasting deklarativt. Du pakker en asynkron komponent inn og oppgir en <code>fallback</code>, og React viser den til dataene er klare. Hver del av siden kan ha sin egen lastetilstand, og resten vises med en gang.</p>
+            <h4>I denne appen</h4>
+            <p>I <a href="#f-TasksPage"><code>TasksPage.tsx</code></a> ligger <code>Tasks</code> inni <code>&lt;Suspense&gt;</code> med et skjelett som fallback. Overskriften og <a href="#f-TaskFilter"><code>TaskFilter.tsx</code></a> vises straks, og listen kommer når <code>service.list()</code> er ferdig.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/server-actions-forms" target="_blank" rel="noopener">Webapp 2025 · L19 Server Actions og forms med useActionState</a><span>: «Suspense og Async Components»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/react-fundamentals" target="_blank" rel="noopener">Webapp 2025 · L5 React fundamentals</a><span>: «Suspense forbedringer»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-rsc">Server- og klientkomponenter</a><a class="k" href="#k-datahenting">Datahenting</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-props">
+          <summary><span class="c-name">Props og komposisjon</span><span class="c-gist">Data og funksjoner sendes nedover fra forelder til barn.</span></summary>
+          <div class="c-body">
+            <p>React har enveis dataflyt: data går ned gjennom props. En prop kan være en verdi, et objekt, eller en funksjon som barnet kaller når noe skjer (en callback). Små komponenter med ett ansvar settes sammen til større. Det er komposisjon.</p>
+            <p>Får en komponent alt den trenger som props, vet den ikke hvor dataene kommer fra. Da kan den gjenbrukes, og testes med akkurat de dataene testen velger.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-TaskList"><code>TaskList.tsx</code></a> får <code>tasks</code> fra <a href="#f-TasksPage"><code>TasksPage.tsx</code></a> og sender én <code>task</code> og callbacken <code>onDelete</code> til hver <a href="#f-TaskItem"><code>TaskItem.tsx</code></a>. <a href="#f-CreateTaskForm"><code>CreateTaskForm.tsx</code></a> får <code>action</code> som prop. <a href="#f-TaskFilter"><code>TaskFilter.tsx</code></a> får <code>params</code>, og derfor trenger testen verken server eller database.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/react-fundamentals" target="_blank" rel="noopener">Webapp 2025 · L5 React fundamentals</a><span>: «Grunnleggende React-filosofi», «Props - Komponentkommunikasjon»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/komponent-separasjon" target="_blank" rel="noopener">Webapp 2025 · L8 Komponent-separasjon</a><span>: teoridelen, «Tekniske valg og alternativer»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/data-separasjon" target="_blank" rel="noopener">Webapp 2025 · L9 Data-separasjon</a><span>: teoridelen (props-basert data injection)</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-props-drilling">Props drilling og Context</a><a class="k" href="#k-state">State</a><a class="k" href="#k-di">Dependency Injection</a><a class="k" href="#k-soc">Separation of Concerns</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-props-drilling">
+          <summary><span class="c-name">Props drilling og Context</span><span class="c-gist">Når props må sendes gjennom mange nivåer, og når Context er svaret.</span></summary>
+          <div class="c-body">
+            <p>Props drilling oppstår når data eller callbacks må sendes gjennom flere komponentnivåer for å nå den som faktisk bruker dem. Mellomleddene tar imot noe de ikke trenger selv. Context API løser det ved å gi komponenter langt nede direkte tilgang.</p>
+            <p>Kurset advarer samtidig: bruk Context sparsomt, bare for data som virkelig trengs på tvers av mange komponenter. Props gjør avhengigheten synlig, og det er verdt mye så lenge treet er grunt.</p>
+            <h4>I denne appen</h4>
+            <p>Appen bruker ikke Context. <code>onDelete</code> går ett nivå, fra <a href="#f-TaskList"><code>TaskList.tsx</code></a> til <a href="#f-TaskItem"><code>TaskItem.tsx</code></a>, og det er vanlig bruk av props. Kommer det flere nivåer mellom, er det her drillingen vil merkes først.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/react-fundamentals" target="_blank" rel="noopener">Webapp 2025 · L5 React fundamentals</a><span>: «Context API - Unngå Props Drilling»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/komponent-separasjon" target="_blank" rel="noopener">Webapp 2025 · L8 Komponent-separasjon</a><span>: «Identifisering av skaleringsutfordringer»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/data-separasjon" target="_blank" rel="noopener">Webapp 2025 · L9 Data-separasjon</a><span>: «Tekniske valg og alternativer»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-props">Props og komposisjon</a><a class="k" href="#k-state">State</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-state">
+          <summary><span class="c-name">State</span><span class="c-gist">Data som endrer seg over tid, og som får komponenten til å tegnes på nytt.</span></summary>
+          <div class="c-body">
+            <p><code>useState</code> gir en komponent lokal tilstand som overlever re-rendringer. Når state endres, rendrer React komponenten på nytt. State endres aldri direkte, bare gjennom setter-funksjonen.</p>
+            <p>Trenger flere komponenter samme data, løftes state opp til nærmeste felles forelder, slik at det finnes én kilde.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-TaskItem"><code>TaskItem.tsx</code></a> har bare <code>error</code> i state. <a href="#f-TasksPageClient"><code>TasksPageClient.tsx</code></a> må ha tre: <code>tasks</code>, <code>loading</code> og <code>error</code>. På <code>/tasks</code> ligger ikke listen i state i det hele tatt. Den kommer som prop fra serveren, så databasen er den ene kilden.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/react-fundamentals" target="_blank" rel="noopener">Webapp 2025 · L5 React fundamentals</a><span>: «State Management med useState», «Lifting State Up - Deling av state»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/frontend-react" target="_blank" rel="noopener">Webapp 2026 · L5 Frontend med React</a><span>: «3.2 React Hooks: useState og useTransition»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-props">Props og komposisjon</a><a class="k" href="#k-usetransition">useTransition</a><a class="k" href="#k-useactionstate">useActionState</a><a class="k" href="#k-datahenting">Datahenting</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-server-actions">
+          <summary><span class="c-name">Server actions</span><span class="c-gist">En funksjon som kjører på serveren, men kalles fra nettleseren som en vanlig funksjon.</span></summary>
+          <div class="c-body">
+            <p>En server action (også kalt server function) er en eksportert async-funksjon i en fil som starter med <code>"use server"</code>. Koden blir på serveren. Klienten importerer funksjonen og kaller den, og React gjør kallet om til en POST og gir returverdien tilbake. Du slipper å lage et eget API-endepunkt for skjemaet.</p>
+            <p>Kurset bruker dem som et supplement til REST, ikke en erstatning: REST er fortsatt riktig når andre klienter skal bruke tjenesten. En action svarer med en verdi for forventede feil, ikke et unntak.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-actions"><code>actions.ts</code></a> har <code>createTaskAction</code> og <code>toggleTaskCompleted</code>. Begge kaller <a href="#f-task-service"><code>task-service.ts</code></a>, så reglene er de samme som i REST-API-et. Appen viser begge veier: avkrysning går via en action, sletting via <code>fetch</code> og REST.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/server-actions-forms" target="_blank" rel="noopener">Webapp 2025 · L19 Server Actions og forms med useActionState</a><span>: «Server Actions i kontekst av vårt eksisterende arkitektur», «Tekniske valg og alternativer»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/backend-utvikling" target="_blank" rel="noopener">Webapp 2026 · L3 Backend med RedwoodSDK</a><span>: «Server functions»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/frontend-react" target="_blank" rel="noopener">Webapp 2026 · L5 Frontend med React</a><span>: «3.3 Server functions og skjemaer»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-useactionstate">useActionState</a><a class="k" href="#k-usetransition">useTransition</a><a class="k" href="#k-rest">REST</a><a class="k" href="#k-result">Result-mønsteret</a><a class="k" href="#k-oppdatering">Oppdatering etter endring</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-useactionstate">
+          <summary><span class="c-name">useActionState</span><span class="c-gist">Kobler et skjema til en server action og tar vare på svaret.</span></summary>
+          <div class="c-body">
+            <p>Hooken gir tre ting: siste svar fra actionen, en <code>formAction</code> til skjemaet, og <code>isPending</code> mens kallet går. Actionen må ta <code>(prevState, formData)</code>. Sammen med et Result som har <code>fieldErrors</code>, kan skjemaet vise feil under riktig felt, uten <code>useEffect</code> eller manuell <code>fetch</code>.</p>
+            <p>En felle: React tømmer feltene i et <code>&lt;form action&gt;</code>-skjema når actionen har svart, også ved feil. Skal brukeren beholde det som ble skrevet, må actionen sende verdiene tilbake.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-CreateTaskForm"><code>CreateTaskForm.tsx</code></a> bruker <code>useActionState</code> med <code>createTaskAction</code>. <code>isPending</code> gir «Lagrer…», <code>fieldErrors</code> vises under <code>title</code> og <code>dueDate</code>, og <code>values</code> fra svaret fyller feltene igjen via <code>defaultValue</code>.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/server-actions-forms" target="_blank" rel="noopener">Webapp 2025 · L19 Server Actions og forms med useActionState</a><span>: «useActionState», «Utvidet Result Type for Forms»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/frontend-react" target="_blank" rel="noopener">Webapp 2026 · L5 Frontend med React</a><span>: «3.3 Server functions og skjemaer»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-server-actions">Server actions</a><a class="k" href="#k-usetransition">useTransition</a><a class="k" href="#k-result">Result-mønsteret</a><a class="k" href="#k-progressive-enhancement">Progressive enhancement</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-usetransition">
+          <summary><span class="c-name">useTransition</span><span class="c-gist">Viser at en endring er på vei, uten å fryse siden.</span></summary>
+          <div class="c-body">
+            <p><code>useTransition</code> markerer at noe asynkront pågår. Mens kallet går, er <code>isPending</code> sann, og komponenten kan låse knappen så brukeren ikke klikker to ganger. Kurset bruker den for mutasjoner, altså handlinger som endrer data: en knapp som liker, følger eller sletter. Svaret fra actionen leser du selv.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-TaskItem"><code>TaskItem.tsx</code></a> pakker både avkrysning og sletting i <code>startTransition</code>. Boksen er låst og statusen viser «lagrer…» til serveren har svart. Feiler avkrysningen, legges meldingen i <code>error</code>.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/frontend-react" target="_blank" rel="noopener">Webapp 2026 · L5 Frontend med React</a><span>: «3.2 React Hooks: useState og useTransition», «3.3 Server functions og skjemaer»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/react-fundamentals" target="_blank" rel="noopener">Webapp 2025 · L5 React fundamentals</a><span>: «useTransition - Ikke-blokkerende state-oppdateringer»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-useactionstate">useActionState</a><a class="k" href="#k-server-actions">Server actions</a><a class="k" href="#k-state">State</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-progressive-enhancement">
+          <summary><span class="c-name">Progressive enhancement</span><span class="c-gist">Først HTML som virker uten JavaScript, så forbedringer oppå.</span></summary>
+          <div class="c-body">
+            <p>Tanken er lag: nederst semantisk HTML og et skjema serveren kan behandle, så CSS, så JavaScript for en bedre opplevelse. Et vanlig HTML-skjema sender seg selv, og serveren svarer med en ny side. Slik virket nettet før SPA-ene, og det virker fortsatt. Fordelen er at siden fungerer i alle miljøer.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-TaskFilter"><code>TaskFilter.tsx</code></a> er et skjema med <code>method="get"</code> og ingen JavaScript. Nettleseren bygger selv <code>/tasks?q=…&amp;completed=…</code> av feltnavnene og ber om siden på nytt.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/server-actions-forms" target="_blank" rel="noopener">Webapp 2025 · L19 Server Actions og forms med useActionState</a><span>: «Utviklingen: Traditional Forms → SPA → SSR → RSC», «Progressive Enhancement Principles»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-query-parametre">Query-parametre</a><a class="k" href="#k-rsc">Server- og klientkomponenter</a><a class="k" href="#k-useactionstate">useActionState</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-oppdatering">
+          <summary><span class="c-name">Oppdatere siden etter en endring</span><span class="c-gist">Når data er endret på serveren, må det brukeren ser, hentes på nytt.</span></summary>
+          <div class="c-body">
+            <p>Etter en mutasjon er HTML-en nettleseren har, utdatert. En server action løser det selv: rwsdk rendrer siden på nytt når actionen har svart. RedwoodSDK har ingen <code>revalidatePath</code>. Endrer du data på en annen måte, må du derfor selv be om siden på nytt etter en vellykket endring.</p>
+            <h4>I denne appen</h4>
+            <p>Avkrysningen i <a href="#f-TaskItem"><code>TaskItem.tsx</code></a> går via en action, så raden får ny <code>completed</code> uten ekstra kode. Slettingen går via <code>fetch</code>, og derfor kaller <a href="#f-TaskList"><code>TaskList.tsx</code></a> <code>navigate()</code> etterpå.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/server-actions-forms" target="_blank" rel="noopener">Webapp 2025 · L19 Server Actions og forms med useActionState</a><span>: «Cache Invalidation Strategies»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/backend-utvikling" target="_blank" rel="noopener">Webapp 2026 · L3 Backend med RedwoodSDK</a><span>: «serverQuery og serverAction»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-server-actions">Server actions</a><a class="k" href="#k-state">State</a><a class="k" href="#k-datahenting">Datahenting</a></div>
+          </div>
+        </details>
+      </div>
+      <div class="theme">
+        <h3>Database</h3>
+        <p class="tnote">Hvordan dataene beskrives, endres og hentes trygt.</p>
+        <details class="concept" id="k-orm">
+          <summary><span class="c-name">ORM og skjema</span><span class="c-gist">Tabellene beskrives i TypeScript, og typene følger med.</span></summary>
+          <div class="c-body">
+            <p>En ORM oversetter mellom objekter i koden og tabeller i databasen. Med Drizzle skriver du skjemaet i TypeScript, spørringene ligner SQL, og typene utledes fra skjemaet. Skjemaet er sannhetskilden: du vedlikeholder aldri egne typer ved siden av.</p>
+            <p>Tidsstempler lagres som <code>integer</code> med <code>mode: "timestamp"</code>, så koden får ekte <code>Date</code>-objekter.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-db-task-schema"><code>db/schema/task-schema.ts</code></a> og <a href="#f-db-user-schema"><code>db/schema/user-schema.ts</code></a> beskriver tabellene og eksporterer typene <code>Task</code>, <code>CreateTask</code> og <code>User</code>. <a href="#f-db-index"><code>db/index.ts</code></a> lager klienten med <code>drizzle(env.DB, { relations })</code>. Bare <a href="#f-task-repository"><code>task-repository.ts</code></a> bruker den.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/database-drizzle-zod" target="_blank" rel="noopener">Webapp 2025 · L16 Database Integration med Drizzle og Zod</a><span>: «ORM vs SQL»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/database" target="_blank" rel="noopener">Webapp 2026 · L8 Database</a><span>: «Skjema», «Typeeksportering», «Databasetilkobling»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-relasjoner">Nøkler og relasjoner</a><a class="k" href="#k-migrasjoner">Migrasjoner</a><a class="k" href="#k-typesikkerhet">Typesikkerhet</a><a class="k" href="#k-repository">Repository-mønsteret</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-relasjoner">
+          <summary><span class="c-name">Nøkler og relasjoner</span><span class="c-gist">Hver rad har en unik id, og fremmednøkler knytter tabellene sammen.</span></summary>
+          <div class="c-body">
+            <p>En primærnøkkel identifiserer raden: unik, aldri tom, og den endres ikke. Kurset foretrekker <code>nanoid</code> for id-er som vises utad. De er korte og URL-vennlige, og kan ikke gjettes slik tall som teller oppover kan. En fremmednøkkel peker på en rad i en annen tabell, og databasen sørger for at koblingen alltid er gyldig. En indeks er en snarvei som gjør oppslag raskere, mot litt ekstra lagring.</p>
+            <p>I Drizzle er det to lag. <code>.references()</code> er databasens regel. <code>defineRelations</code> forteller bare TypeScript-laget hvilke rader som hører sammen, og lager ingen kolonner.</p>
+            <h4>I denne appen</h4>
+            <p><code>tasks.id</code> lages med nanoid (<a href="#f-db-task-schema"><code>db/schema/task-schema.ts</code></a>), <code>users.id</code> teller oppover (<a href="#f-db-user-schema"><code>db/schema/user-schema.ts</code></a>). <code>user_id</code> peker på brukeren med <code>onDelete: "cascade"</code> og har en indeks. <a href="#f-relations"><code>relations.ts</code></a> sier at en bruker har mange oppgaver.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/database-drizzle-zod" target="_blank" rel="noopener">Webapp 2025 · L16 Database Integration med Drizzle og Zod</a><span>: «Primary Keys (PK)», «Database relasjoner», «Database Indexer»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/database" target="_blank" rel="noopener">Webapp 2026 · L8 Database</a><span>: «Relasjoner», «Relasjoner i TypeScript-laget»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-orm">ORM og skjema</a><a class="k" href="#k-migrasjoner">Migrasjoner</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-migrasjoner">
+          <summary><span class="c-name">Migrasjoner</span><span class="c-gist">Versjonskontroll for databasen.</span></summary>
+          <div class="c-body">
+            <p>En migrasjon er en lagret endring av skjemaet, omtrent som en commit i git. Uten migrasjoner har utviklerne og produksjon hver sin versjon av databasen. Med dem kan alle miljøer bringes til samme tilstand. Flyten er: endre skjemaet, generer en migrasjon, kjør den mot databasen.</p>
+            <p>I Drizzle går migrasjoner bare én vei. Skal noe angres, lages en ny migrasjon som gjør det motsatte. Å legge til kolonner og tabeller er trygt. Å slette eller gi nytt navn kan koste data.</p>
+            <h4>I denne appen</h4>
+            <p><code>drizzle/migrations/</code> lages med <code>npm run migrate:new</code> og kjøres med <code>npm run migrate:dev</code>. <a href="#f-test-task-service"><code>task-service.test.ts</code></a> kjører de samme migrasjonene mot SQLite i minnet, så testdatabasen har samme tabeller som appen.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/database-drizzle-zod" target="_blank" rel="noopener">Webapp 2025 · L16 Database Integration med Drizzle og Zod</a><span>: «Migrering»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/database" target="_blank" rel="noopener">Webapp 2026 · L8 Database</a><span>: «Migrasjoner»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-orm">ORM og skjema</a><a class="k" href="#k-seeding">Seeding</a><a class="k" href="#k-integrasjonstest">Integrasjonstest</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-seeding">
+          <summary><span class="c-name">Seeding</span><span class="c-gist">Et skript som fyller databasen med startdata.</span></summary>
+          <div class="c-body">
+            <p>En tom database er vanskelig å utvikle mot. Et seed-skript legger inn data appen trenger, eller testdata å jobbe med. Det skal kunne kjøres mange ganger uten å lage duplikater. Og du må vite hvilken database det kjører mot, så testdata ikke havner i produksjon.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-seed"><code>seed.ts</code></a> tømmer tabellene først og legger så inn én bruker og to oppgaver. Derfor gir <code>npm run seed</code> samme resultat hver gang.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/database-drizzle-zod" target="_blank" rel="noopener">Webapp 2025 · L16 Database Integration med Drizzle og Zod</a><span>: «Database Seeding»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/database" target="_blank" rel="noopener">Webapp 2026 · L8 Database</a><span>: «Demo: fyll databasen med en bruker og data (seeding)»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-migrasjoner">Migrasjoner</a><a class="k" href="#k-orm">ORM og skjema</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-sql-injection">
+          <summary><span class="c-name">SQL injection og parameteriserte spørringer</span><span class="c-gist">Brukerens tekst skal behandles som data, aldri som SQL.</span></summary>
+          <div class="c-body">
+            <p>SQL injection oppstår når input limes rett inn i en SQL-tekst. Da kan den som skriver, endre selve spørringen. Spørringsbyggeren i Drizzle sender mal og data hver for seg, så databasen aldri tolker dataene som SQL. Vernet forsvinner hvis du skriver rå SQL-strenger selv.</p>
+            <p>En detalj fra Webapp 2026: i et <code>LIKE</code>-søk er <code>%</code> og <code>_</code> fortsatt jokertegn, selv om spørringen er parameterisert.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-task-repository"><code>task-repository.ts</code></a> bruker bare spørringsbyggeren, også for søket på tittel (<code>like</code> med <code>q</code>). <code>AGENTS.md</code> forbyr <code>sql.raw</code>.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/sikkerhet-webapplikasjoner" target="_blank" rel="noopener">Webapp 2026 · L13 Sikkerhet for webapplikasjoner</a><span>: «SQL Injection»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/fullstack-testing" target="_blank" rel="noopener">Webapp 2026 · L8a Fullstack-testing</a><span>: «3.7 Test mot injeksjon og fiendtlig input»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-repository">Repository-mønsteret</a><a class="k" href="#k-validering">Inputvalidering</a></div>
+          </div>
+        </details>
+      </div>
+      <div class="theme">
+        <h3>Testing</h3>
+        <p class="tnote">Hvordan vi vet at koden gjør det den skal.</p>
+        <details class="concept" id="k-testpyramiden">
+          <summary><span class="c-name">Testpyramiden</span><span class="c-gist">Mange raske tester nederst, få trege øverst.</span></summary>
+          <div class="c-body">
+            <p>Fire nivåer: enhetstest (én ren funksjon, raskest), komponenttest (én komponent og det brukeren gjør med den), integrasjonstest (flere lag sammen, med database) og E2E (hele appen i en ekte nettleser, tregest).</p>
+            <p>Du vil ha mange enhetstester, færre integrasjonstester og et knippe E2E-tester. Integrasjonstester gir mye trygghet per test, fordi de dekker koblingen mellom lagene.</p>
+            <h4>I denne appen</h4>
+            <p><code>__tests__/</code> har ett eksempel fra hvert av de tre nederste nivåene: <a href="#f-test-task-mapper"><code>task-mapper.test.ts</code></a>, <a href="#f-test-TaskFilter"><code>TaskFilter.test.tsx</code></a> og <a href="#f-test-task-service"><code>task-service.test.ts</code></a>. Toppen ligger i <code>e2e/</code> og kjøres med Playwright (<code>npm run test:e2e</code>), foreløpig bare for forsiden.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/fullstack-testing" target="_blank" rel="noopener">Webapp 2026 · L8a Fullstack-testing</a><span>: «3.1 Testpyramiden»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-enhetstest">Enhetstest</a><a class="k" href="#k-komponenttest">Komponenttest</a><a class="k" href="#k-integrasjonstest">Integrasjonstest</a><a class="k" href="#k-tdd">TDD</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-enhetstest">
+          <summary><span class="c-name">Enhetstest</span><span class="c-gist">Tester én liten bit kode alene, uten database og nettverk.</span></summary>
+          <div class="c-body">
+            <p>En enhetstest tester én isolert enhet, typisk én funksjon. Den er rask og deterministisk: samme svar hver gang. Rene funksjoner er lettest å teste, fordi de bare har input og output. Testen skal sjekke hva funksjonen gjør (resultatet), ikke hvordan den gjør det inni.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-test-task-mapper"><code>task-mapper.test.ts</code></a> sjekker <code>toTaskDTO</code> uten database. <a href="#f-validate-task"><code>validate-task.ts</code></a> og <a href="#f-date"><code>date.ts</code></a> er skrevet som rene funksjoner og kan testes på samme måte. <code>validateTask</code> tar til og med <code>now</code> som argument, så en test kan bestemme hva «i dag» er.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/tdd-og-ki" target="_blank" rel="noopener">Webapp 2026 · L2 Testdrevet utvikling og KI</a><span>: «Enhetstest vs. integrasjonstest», «To fallgruver når KI møter TDD»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/komponent-separasjon" target="_blank" rel="noopener">Webapp 2025 · L8 Komponent-separasjon</a><span>: «Enhetstesting (Unit Testing)»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-testpyramiden">Testpyramiden</a><a class="k" href="#k-tdd">TDD</a><a class="k" href="#k-integrasjonstest">Integrasjonstest</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-komponenttest">
+          <summary><span class="c-name">Komponenttest</span><span class="c-gist">Tegner én komponent og sjekker det brukeren ser og kan gjøre.</span></summary>
+          <div class="c-body">
+            <p>Komponenttester trenger et DOM. <code>happy-dom</code> er et lite DOM som kjører i Node, uten nettleser, og slås på per fil med en kommentar øverst. Testing Library rendrer komponenten og finner elementer slik en bruker gjør: på rolle, ledetekst eller synlig tekst, ikke på CSS-klasser. <code>userEvent</code> etterligner tastetrykk og klikk.</p>
+            <p>Da tester du oppførsel og ikke implementasjon. Bytter noen en klasse, består testen. Fjerner noen knappen, feiler den.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-test-TaskFilter"><code>TaskFilter.test.tsx</code></a> starter med <code>// @vitest-environment happy-dom</code>, finner feltene med <code>getByLabelText</code> og skriver med <code>userEvent</code>. Ingenting må mockes, fordi <a href="#f-TaskFilter"><code>TaskFilter.tsx</code></a> får alt som prop.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/komponenttesting" target="_blank" rel="noopener">Webapp 2026 · L5a Komponenttesting</a><span>: «3.1 Oppsett: happy-dom + Testing Library», «3.2 Test uten hooks (presentasjonskomponent)»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/komponent-separasjon" target="_blank" rel="noopener">Webapp 2025 · L8 Komponent-separasjon</a><span>: «Testing»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-testpyramiden">Testpyramiden</a><a class="k" href="#k-mock">Mock, stub og spy</a><a class="k" href="#k-props">Props og komposisjon</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-integrasjonstest">
+          <summary><span class="c-name">Integrasjonstest</span><span class="c-gist">Tester at flere lag virker sammen, mot en ekte database i minnet.</span></summary>
+          <div class="c-body">
+            <p>Enhetstester fanger ikke feil i samspillet mellom lagene. En integrasjonstest kjører den ekte koden mot en SQLite-database i minnet, bygget med de samme migrasjonene som appen. Produksjonskoden er uendret, bare databasedriveren er byttet. Hver test starter med tom database.</p>
+            <p>Webapp 2026 viser to måter å bytte databasen på: <code>vi.mock</code> av modulen, eller å sende den inn som parameter når koden er delt i lag.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-test-task-service"><code>task-service.test.ts</code></a> lager en ny database i <code>beforeEach</code> og bygger <code>createTaskService(createTaskRepository(db))</code>. Service og repository er de ekte. Foreløpig testes bare <code>list</code>.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/fullstack-testing" target="_blank" rel="noopener">Webapp 2026 · L8a Fullstack-testing</a><span>: «3.2 Hvorfor mocke databasen?»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/full-stack-integrasjon" target="_blank" rel="noopener">Webapp 2026 · L10 Full-stack-integrasjon og deploy</a><span>: «Integrasjonstesting med Vitest»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/service-controller-n-layer" target="_blank" rel="noopener">Webapp 2025 · L17 Service og Controller Separation med N-Layer Arkitektur</a><span>: «Testing med Separated Layers»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-di">Dependency Injection</a><a class="k" href="#k-migrasjoner">Migrasjoner</a><a class="k" href="#k-testpyramiden">Testpyramiden</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-tdd">
+          <summary><span class="c-name">TDD og testene som sikkerhetsnett</span><span class="c-gist">Red, Green, Refactor: skriv testen før koden.</span></summary>
+          <div class="c-body">
+            <p>I testdrevet utvikling skriver du først en test som feiler (Red), så akkurat nok kode til at den består (Green), og rydder til slutt uten å endre oppførsel (Refactor). Poenget er design: du må bestemme hva koden skal gjøre før du skriver den.</p>
+            <p>Testene blir stående som vern mot regresjon, altså at noe som virket, slutter å virke. TDD passer best på ren logikk med regler, som validering og datatransformasjon. Dekning viser hva som ikke er testet, men sier ikke at resten er riktig.</p>
+            <h4>I denne appen</h4>
+            <p><a href="#f-validate-task"><code>validate-task.ts</code></a> er typen kode TDD passer for: klare regler, ingen server. <a href="#monstre">«Ikke ferdig ennå»</a> lister hva som mangler tester: <code>update</code>, <code>remove</code> og <code>findById</code> i <a href="#f-task-service"><code>task-service.ts</code></a>.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/tdd-og-ki" target="_blank" rel="noopener">Webapp 2026 · L2 Testdrevet utvikling og KI</a><span>: «TDD-syklusen», «Dekning er et biprodukt, ikke et mål», «Når TDD ikke lønner seg»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/komponent-separasjon" target="_blank" rel="noopener">Webapp 2025 · L8 Komponent-separasjon</a><span>: «AAA-Pattern (Arrange, Act, Assert)», «Regressjon»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-enhetstest">Enhetstest</a><a class="k" href="#k-make-it-work">Make it work</a><a class="k" href="#k-ki-praksis">KI-praksis</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-mock">
+          <summary><span class="c-name">Mock, stub og spy</span><span class="c-gist">Falske utgaver som holder resten av systemet utenfor testen.</span></summary>
+          <div class="c-body">
+            <p>En mock erstatter en ekte modul eller funksjon med en utgave testen styrer, så testen slipper server, database og nettverk. En stub er en mock med et fast svar. En spy husker hvordan den ble kalt, så testen kan sjekke antall kall og argumenter. Poenget er å teste ett ansvar om gangen.</p>
+            <p>Testene kjører i Node, ikke i Cloudflares <code>workerd</code>. Det som bare finnes der, må derfor byttes ut.</p>
+            <h4>I denne appen</h4>
+            <p><code>vitest.config.ts</code> bytter <code>cloudflare:workers</code> med stubben <code>src/test/cloudflare-workers.ts</code>, fordi modulen ikke finnes i Node. Ellers trenger testene her få mocker: <a href="#f-test-TaskFilter"><code>TaskFilter.test.tsx</code></a> får alt som prop, og <a href="#f-test-task-service"><code>task-service.test.ts</code></a> får databasen sendt inn.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/komponenttesting" target="_blank" rel="noopener">Webapp 2026 · L5a Komponenttesting</a><span>: «3.5 Mock, isoler komponenten», «3.6 Spy, verifiser at noe ble kalt», «3.8 Nettverk og Cloudflare, mock det»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/komponent-separasjon" target="_blank" rel="noopener">Webapp 2025 · L8 Komponent-separasjon</a><span>: «Mocking», «Spys»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-komponenttest">Komponenttest</a><a class="k" href="#k-integrasjonstest">Integrasjonstest</a><a class="k" href="#k-di">Dependency Injection</a></div>
+          </div>
+        </details>
+      </div>
+      <div class="theme">
+        <h3>Kodepraksis</h3>
+        <p class="tnote">Prinsippene som går igjen i alle lagene.</p>
+        <details class="concept" id="k-soc">
+          <summary><span class="c-name">Separation of Concerns</span><span class="c-gist">Hver del av koden har ett tydelig ansvar.</span></summary>
+          <div class="c-body">
+            <p>Separasjon av ansvar går igjen i hele Webapp 2025: logikk ut av komponenter, store komponenter delt i små, data adskilt fra visning, og til slutt backend delt i lag. Single Responsibility Principle er det samme i liten skala: en komponent eller funksjon skal ha ett ansvar.</p>
+            <p>Gevinsten er den samme hver gang: lettere å forstå, lettere å teste isolert, og en endring treffer et mindre område.</p>
+            <h4>I denne appen</h4>
+            <p>Hele dokumentet er et bilde av dette: <a href="#f-task-controller"><code>task-controller.ts</code></a> kan HTTP, <a href="#f-task-service"><code>task-service.ts</code></a> kan reglene, <a href="#f-task-repository"><code>task-repository.ts</code></a> kan databasen. I nettleseren viser <a href="#f-TaskItem"><code>TaskItem.tsx</code></a> én rad, mens <a href="#f-TaskList"><code>TaskList.tsx</code></a> bestemmer hva sletting betyr.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/refactoring-komponent" target="_blank" rel="noopener">Webapp 2025 · L7 Refaktorering med custom hooks</a><span>: teoridelen</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/komponent-separasjon" target="_blank" rel="noopener">Webapp 2025 · L8 Komponent-separasjon</a><span>: teoridelen (Single Responsibility Principle)</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/service-controller-n-layer" target="_blank" rel="noopener">Webapp 2025 · L17 Service og Controller Separation med N-Layer Arkitektur</a><span>: «Teoretisk bakgrunn: N-Layer Arkitektur»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/oppsummering-webapp-25" target="_blank" rel="noopener">Webapp 2025 · L23 Fra Monolitt til Profesjonell Arkitektur</a><span>: «Designprinsipper vi har anvendt»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-n-lag">N-lags arkitektur</a><a class="k" href="#k-props">Props og komposisjon</a><a class="k" href="#k-features">Features-basert struktur</a><a class="k" href="#k-dry">DRY</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-dry">
+          <summary><span class="c-name">DRY: ikke gjenta deg selv</span><span class="c-gist">Samme regel skal stå ett sted.</span></summary>
+          <div class="c-body">
+            <p>DRY (Don't Repeat Yourself) handler om at duplisert logikk gir inkonsistens: én kopi blir endret, den andre ikke. Kurset bruker prinsippet når spredte <code>fetch</code>-kall samles i et API-bibliotek, og når lik validering i flere handlere flyttes til en service.</p>
+            <h4>I denne appen</h4>
+            <p>Reglene for en oppgave står bare i <a href="#f-validate-task"><code>validate-task.ts</code></a>, og brukes av både <code>create</code> og <code>update</code>. Tre innganger deler én <a href="#f-task-service"><code>task-service.ts</code></a>. <a href="#f-parse-params"><code>parse-params.ts</code></a> brukes av både siden og API-et.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/api-bibliotek" target="_blank" rel="noopener">Webapp 2025 · L12 API-bibliotek</a><span>: teoridelen (DRY-prinsippet)</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/service-controller-n-layer" target="_blank" rel="noopener">Webapp 2025 · L17 Service og Controller Separation med N-Layer Arkitektur</a><span>: «Problemet med monolittisk struktur»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-soc">Separation of Concerns</a><a class="k" href="#k-api-klient">API-klient</a><a class="k" href="#k-n-lag">N-lags arkitektur</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-make-it-work">
+          <summary><span class="c-name">Make it work, then make it better</span><span class="c-gist">Få det til å virke først. Forbedre én ting om gangen etterpå.</span></summary>
+          <div class="c-body">
+            <p>Webapp 2025 starter ikke med ferdig arkitektur. Først lages noe som virker, så finner man problemene, refaktorerer én ting om gangen og sjekker at alt fortsatt fungerer. Abstraksjoner legges på når behovet er der, ikke før: kurset advarer mot over-engineering og for tidlig optimalisering.</p>
+            <p>Kurset sier også selv at eksempelappen er en enkel CRUD-app som strengt tatt ikke trenger alle lagene.</p>
+            <h4>I denne appen</h4>
+            <p>Tasks-appen er også enkel CRUD, så den samme avveiingen gjelder her. <a href="#monstre">«Ikke ferdig ennå»</a> er listen over neste runde med forbedringer.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/intro" target="_blank" rel="noopener">Webapp 2025 · L1 Introduksjon til kurset</a><span>: «Kursets filosofi»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/database-drizzle-zod" target="_blank" rel="noopener">Webapp 2025 · L16 Database Integration med Drizzle og Zod</a><span>: «Utdyping: Hvorfor denne tilnærmingen?»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/service-controller-n-layer" target="_blank" rel="noopener">Webapp 2025 · L17 Service og Controller Separation med N-Layer Arkitektur</a><span>: «Når er N-Layer Arkitektur passende?»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-tdd">TDD</a><a class="k" href="#k-n-lag">N-lags arkitektur</a><a class="k" href="#k-soc">Separation of Concerns</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-typesikkerhet">
+          <summary><span class="c-name">Typesikkerhet ende til ende</span><span class="c-gist">Typene utledes fra én kilde og følger dataene gjennom alle lag.</span></summary>
+          <div class="c-body">
+            <p>Kurset bygger typesikkerhet i trinn: grensesnitt som kontrakter for komponenter, typer generert fra databaseskjemaet, og til slutt typer gjennom hele appen.</p>
+            <p>To regler går igjen. Typene utledes fra skjemaet, så de aldri kommer i utakt med tabellen. Og TypeScript gjelder bare i koden: data utenfra er ukjente til de er validert når appen kjører.</p>
+            <h4>I denne appen</h4>
+            <p><code>Task</code> kommer fra tabellen (<a href="#f-db-task-schema"><code>db/schema/task-schema.ts</code></a>), <code>CreateTaskInput</code> fra Zod-skjemaet (<a href="#f-task-schema"><code>task-schema.ts</code></a>) og <code>TaskDTO</code> fra <a href="#f-task-mapper"><code>task-mapper.ts</code></a>. Body i <a href="#f-task-controller"><code>task-controller.ts</code></a> er <code>unknown</code> til service har validert den. <a href="#f-task-api"><code>task-api.ts</code></a> har en <code>as</code> på svaret fra serveren, med en TODO om å validere i stedet.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/data-separasjon" target="_blank" rel="noopener">Webapp 2025 · L9 Data-separasjon</a><span>: «Data-kontrakter med TypeScript»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2025/lessons/oppsummering-webapp-25" target="_blank" rel="noopener">Webapp 2025 · L23 Fra Monolitt til Profesjonell Arkitektur</a><span>: «Type-sikkerhet evolusjon»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/database" target="_blank" rel="noopener">Webapp 2026 · L8 Database</a><span>: «Typeeksportering»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-validering">Inputvalidering</a><a class="k" href="#k-orm">ORM og skjema</a><a class="k" href="#k-dto">DTO og mappere</a><a class="k" href="#k-result">Result-mønsteret</a></div>
+          </div>
+        </details>
+        <details class="concept" id="k-ki-praksis">
+          <summary><span class="c-name">KI-praksis og AGENTS.md</span><span class="c-gist">KI foreslår, du må kunne forklare.</span></summary>
+          <div class="c-body">
+            <p>Webapp 2026 har én huskeregel for KI-generert kode: kan du ikke forklare den, bør du ikke bruke den. Når KI foreslår kode, er det testene som avgjør. <code>AGENTS.md</code> er filen der prosjektets regler står, slik at kodeverktøy slipper å gjette på stack og versjoner.</p>
+            <p>Det KI ikke gjør for deg, er arkitekturforståelsen: å kunne begrunne hvorfor koden er delt opp slik den er.</p>
+            <h4>I denne appen</h4>
+            <p><code>AGENTS.md</code> i prosjektroten har versjonene, fallgruvene og reglene koden her følger, som Zod med <code>safeParse</code> på alt utenfra, og logikk i egne funksjoner som kan testes uten server.</p>
+            <h4>I kurset</h4>
+            <ul>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/tdd-og-ki" target="_blank" rel="noopener">Webapp 2026 · L2 Testdrevet utvikling og KI</a><span>: «Evaluere KI-generert kode»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/coding-agents" target="_blank" rel="noopener">Webapp 2026 · L2b Coding agents</a><span>: «Kontekst er alt: AGENTS.md»</span></li>
+              <li><a href="https://fullstaekk.no/courses/webapp-2026/lessons/vibe-coding" target="_blank" rel="noopener">Webapp 2026 · L6 Vibe coding</a><span>: «Arkitekturforståelse, den varige verdien»</span></li>
+            </ul>
+            <div class="kc"><span class="kc-l">Se også</span><a class="k" href="#k-tdd">TDD</a><a class="k" href="#k-typesikkerhet">Typesikkerhet</a></div>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <footer>Laget fra koden i <code>webapp/tasks/src</code>, commit faf4c26, 7. oktober 2026. Oppdatert 10. oktober 2026 med update, remove og testene, fra arbeidskopien etter commit 56c7482. Teorien bak lagt til 11. oktober 2026, fra leksjonene i Webapp 2025 og Webapp 2026.</footer>
+</div>
+
+<dialog class="kdlg" id="kdlg" aria-labelledby="kdlg-title">
+  <div class="kdlg-in">
+    <div class="kdlg-head">
+      <div>
+        <div class="eyebrow" id="kdlg-theme"></div>
+        <h3 id="kdlg-title"></h3>
+      </div>
+      <button class="kdlg-close" type="button" aria-label="Lukk">×</button>
+    </div>
+    <p class="kdlg-gist" id="kdlg-gist"></p>
+    <div class="c-body" id="kdlg-body"></div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  var FLOWS = {
+    all: null,
+    page: {
+      title: "Siden /tasks (serverside)",
+      steps: [
+        "Nettleseren ber om <code>/tasks</code>. <code>worker.tsx</code> rendrer <code>TasksPage.tsx</code> på serveren.",
+        "Siden leser query-parametrene og viser <code>TaskFilter</code> med dem. Trykker brukeren «Filtrer», ber nettleseren om <code>/tasks?q=…&amp;completed=…</code>, og samme vei går en gang til.",
+        "Siden sender skjelettet med en gang (<code>Suspense</code>) mens den venter på data.",
+        "<code>Tasks</code> kaller <code>service.list(params)</code> direkte. Ingen fetch og ingen controller, for koden kjører allerede på serveren.",
+        "Service sjekker parametrene med <code>validate-list-params.ts</code>, repository henter radene, og <code>task-mapper.ts</code> lager DTO-er.",
+        "<code>TaskList</code> får listen som prop og viser én <code>TaskItem</code> per oppgave. Ferdig HTML strømmes til nettleseren."
+      ]
+    },
+    form: {
+      title: "Skjemaet (server action)",
+      steps: [
+        "Brukeren skriver i <code>CreateTaskForm</code> og trykker «Legg til».",
+        "<code>useActionState</code> kaller <code>createTaskAction</code> i <code>actions.ts</code>. React sender kallet som en POST til serveren.",
+        "<code>actions.ts</code> leser <code>title</code> og <code>dueDate</code> fra <code>FormData</code> og kaller <code>service.create()</code>.",
+        "Service sjekker input med <code>task-schema.ts</code> og <code>validate-task.ts</code>, repository lagrer, og <code>task-mapper.ts</code> lager DTO-en.",
+        "Svaret går tilbake til skjemaet. Ved feil vises feltfeilene, og feltene fylles inn igjen."
+      ]
+    },
+    update: {
+      title: "Kryss av (server action)",
+      steps: [
+        "Brukeren krysser av i <code>TaskItem</code>. <code>useTransition</code> låser boksen og viser «lagrer…».",
+        "<code>TaskItem</code> kaller <code>toggleTaskCompleted(id, !completed)</code> i <code>actions.ts</code>. React sender kallet som en POST til serveren.",
+        "<code>actions.ts</code> kaller <code>service.update(id, { completed })</code>.",
+        "Service sjekker formen med <code>updateTaskSchema</code> i <code>task-schema.ts</code>, at minst ett felt er med, og reglene med <code>validate-task.ts</code>.",
+        "Repository endrer raden og får den tilbake. Kommer ingen rad tilbake, finnes ikke oppgaven, og service svarer med <code>404</code>.",
+        "<code>task-mapper.ts</code> lager DTO-en. Ved feil viser <code>TaskItem</code> meldingen under raden.",
+        "Etter en server action rendres siden på nytt, så avkrysningsboksen får den nye verdien fra serveren.",
+        "De samme reglene nås med <code>PATCH /api/v1/tasks/:id</code> gjennom controlleren. Appen selv bruker bare server action."
+      ]
+    },
+    remove: {
+      title: "Slett: DELETE /api/v1/tasks/:id",
+      steps: [
+        "Brukeren trykker «Slett» i <code>TaskItem</code>, som kaller <code>onDelete(id)</code>. Funksjonen kommer som prop fra <code>TaskList</code>.",
+        "<code>TaskList</code> kaller <code>removeTask(id)</code> i <code>task-api.ts</code>, som sender <code>fetch</code> med <code>DELETE</code>.",
+        "<code>task-routes.ts</code> sender <code>DELETE</code> videre til <code>controller.remove</code>, som leser <code>params.id</code> og kaller <code>service.remove()</code>.",
+        "Service sjekker først med <code>repository.findById</code> at oppgaven finnes. Finnes den ikke, er svaret <code>404</code>.",
+        "Repository sletter raden med <code>db.delete(tasks)</code>.",
+        "Controlleren svarer <code>204</code> uten body, og <code>task-api.ts</code> gjør det om til <code>{ ok: true }</code>.",
+        "<code>TaskList</code> kaller <code>navigate()</code> og henter siden på nytt, så raden forsvinner fra listen."
+      ]
+    },
+    rest: {
+      title: "REST-API: POST /api/v1/tasks",
+      steps: [
+        "En klient (Postman, curl eller <code>task-api.ts</code>) sender <code>POST /api/v1/tasks</code> med JSON.",
+        "<code>worker.tsx</code> finner ruten i <code>taskRoutes</code>, og <code>task-routes.ts</code> velger <code>controller.create</code>.",
+        "Controlleren leser body med <code>request.json()</code> og kaller <code>service.create()</code>.",
+        "Service sjekker formen med <code>task-schema.ts</code> og reglene med <code>validate-task.ts</code>, og legger til <code>userId</code>.",
+        "Repository setter inn raden i <code>tasks</code>-tabellen via <code>db</code>.",
+        "Service gjør raden om til en DTO med <code>task-mapper.ts</code>.",
+        "Controlleren svarer med status 201, eller 400/500 hvis noe feilet."
+      ]
+    },
+    client: {
+      title: "Siden /tasks-client (klientside)",
+      steps: [
+        "Nettleseren ber om <code>/tasks-client</code>. <code>worker.tsx</code> sender <code>TasksPageClient.tsx</code>, som kommer uten oppgaver.",
+        "<code>useEffect</code> kaller <code>listTasks()</code> i <code>task-api.ts</code>.",
+        "<code>task-api.ts</code> sender <code>fetch(\"/api/v1/tasks\")</code>, en helt ny HTTP-forespørsel inn til serveren.",
+        "<code>task-routes.ts</code> sender <code>GET</code> videre til <code>controller.list</code>.",
+        "Controlleren leser query-parametrene og kaller <code>service.list()</code>.",
+        "Service sjekker parametrene, repository henter radene, og mapper lager DTO-er.",
+        "Controlleren svarer med JSON og status 200. Komponenten legger listen i state og viser den."
+      ]
+    }
+  };
+
+  var svg = document.getElementById("map");
+  var stepsBox = document.getElementById("steps");
+  var restingHTML = stepsBox.innerHTML;
+  var buttons = document.querySelectorAll(".flowbtn");
+  var parts = svg.querySelectorAll("[data-f]");
+
+  function select(flow) {
+    var on = flow !== "all";
+    svg.classList.toggle("flowing", on);
+    parts.forEach(function (el) {
+      var hit = !on || el.getAttribute("data-f").split(" ").indexOf(flow) !== -1;
+      el.classList.toggle("dim", !hit);
+      el.classList.toggle("on", on && hit);
+    });
+    buttons.forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-flow") === flow));
+    });
+    var f = FLOWS[flow];
+    if (!f) { stepsBox.innerHTML = restingHTML; return; }
+    stepsBox.innerHTML = "<h3>" + f.title + "</h3><ol>" +
+      f.steps.map(function (s) { return "<li>" + s + "</li>"; }).join("") + "</ol>";
+  }
+
+  buttons.forEach(function (b) {
+    b.addEventListener("click", function () { select(b.getAttribute("data-flow")); });
+  });
+})();
+// Teori: et klikk på et begrep åpner forklaringen i en dialog. Innholdet hentes fra
+// oppslagsdelen (#teori), så teksten står ett sted. Uten JavaScript er chipsene vanlige lenker dit.
+(function () {
+  function openTarget() {
+    var c = document.getElementById(location.hash.slice(1));
+    if (c && c.classList.contains("concept")) c.open = true;
+  }
+  window.addEventListener("hashchange", openTarget);
+  openTarget();
+
+  var dlg = document.getElementById("kdlg");
+  if (!dlg || typeof dlg.showModal !== "function") return;
+  var theme = document.getElementById("kdlg-theme");
+  var title = document.getElementById("kdlg-title");
+  var gist = document.getElementById("kdlg-gist");
+  var body = document.getElementById("kdlg-body");
+  var close = dlg.querySelector(".kdlg-close");
+
+  function show(id) {
+    var c = document.getElementById(id);
+    if (!c || !c.classList.contains("concept")) return false;
+    theme.textContent = c.closest(".theme").querySelector("h3").textContent;
+    title.textContent = c.querySelector(".c-name").textContent;
+    gist.textContent = c.querySelector(".c-gist").textContent;
+    var copy = c.querySelector(".c-body").cloneNode(true);
+    copy.id = "kdlg-body";
+    body.replaceWith(copy);
+    body = copy;
+    if (!dlg.open) dlg.showModal();
+    dlg.scrollTop = 0;
+    close.focus();
+    return true;
+  }
+
+  document.addEventListener("click", function (e) {
+    var k = e.target.closest("a.k");
+    if (k) {
+      if (show(k.getAttribute("href").slice(1))) e.preventDefault();
+      return;
+    }
+    if (!dlg.open) return;
+    // Lukk på bakgrunnen, på krysset, og når en lenke til en fil i dokumentet følges
+    if (e.target === dlg || e.target.closest(".kdlg-close") || e.target.closest("#kdlg-body a[href^='#']")) dlg.close();
+  });
+})();
+</script>
+</body>
+</html>
