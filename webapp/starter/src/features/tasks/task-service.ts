@@ -6,9 +6,8 @@
 // Her tilgjengeligjør vi funksjonalitet som "actions.ts" og "controller" trenger
 
 import z from "zod";
-import { TaskDTO } from "./task-mapper";
+import { toTaskDTO, type TaskDTO } from "./task-mapper";
 import { taskRepository, type TaskRepository } from "./task-repository";
-import { createTaskSchema } from "./task-validator";
 import { createTaskSchema } from "./task-validator";
 
 export interface TaskService {
@@ -35,7 +34,7 @@ export interface TaskService {
   remove(user: any, id: string): Promise<any>;
 }
 
-export function createTaskService(repository: TaskRepository): TaskService {
+export function createTaskService(_repository: TaskRepository): TaskService {
   return {
     async list(user) {
       // Her parser vi kanskje noen query params som vi har fått inn som data
@@ -43,7 +42,7 @@ export function createTaskService(repository: TaskRepository): TaskService {
       // Her kaller vi repository.findMany()
       // Her returnerer vi resultatet av det vi fikk fra repository
     },
-    async create(data: unknown) {
+    async create(user, data: unknown) {
       const parsed = createTaskSchema.safeParse(data);
       if (!parsed.success) {
         return {
@@ -55,6 +54,31 @@ export function createTaskService(repository: TaskRepository): TaskService {
           },
         };
       }
+
+      const { duedate, ...taskData } = parsed.data;
+      const result = await _repository.create({
+        ...taskData,
+        dueDate: duedate,
+        userId: user.id,
+      });
+
+      if (!result.ok) {
+        return result;
+      }
+
+      return {
+        ok: true,
+        data: toTaskDTO(result.data),
+      };
+    },
+    async get(user, id) {
+      throw new Error("Not implemented");
+    },
+    async update(user, id, input) {
+      throw new Error("Not implemented");
+    },
+    async remove(user, id) {
+      throw new Error("Not implemented");
     },
   };
 }
