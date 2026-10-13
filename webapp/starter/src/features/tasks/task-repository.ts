@@ -1,17 +1,51 @@
 import { db, type DB } from "@/db";
+import { tasks, type CreateTask, type Task } from "@/db/schema";
 
 export interface TaskRepository {
-  create: (task: any) => Promise<any>;
+  create: (task: CreateTask) => Promise<
+    | {
+        ok: true;
+        data: Task;
+      }
+    | {
+        ok: false;
+        error: {
+          code: number;
+          message: string;
+          fieldErrors?: Record<string, string[]>;
+        };
+      }
+  >;
   update: (id: string, task: any) => Promise<any>;
   get: (id: string) => Promise<any>;
   list: () => Promise<any>;
   remove: (id: string) => Promise<any>;
 }
 
-export function createTaskRepository(db: DB): TaskRepository {
+export function createTaskRepository(_db: DB): TaskRepository {
   return {
-    create: (task) => {
-      return db.insert(tasks).values(task);
+    create: async (data) => {
+      try {
+        const createTask = await _db
+          .insert(tasks)
+          .values(data)
+          .returning()
+          .get();
+        return {
+          ok: true,
+          data: createTask,
+        };
+      } catch (error) {
+        console.error(error);
+        return {
+          ok: false,
+          error: {
+            code: 500,
+            message: "Noe gikk galt i databasen",
+            fieldErrors: {},
+          },
+        };
+      }
     },
     update: async (id, task) => {
       throw new Error("Not implemented");
@@ -22,8 +56,7 @@ export function createTaskRepository(db: DB): TaskRepository {
     list: async () => {
       throw new Error("Not implemented");
     },
-    remove: async (id) => {
-    },
+    remove: async (id) => {},
   };
 }
 
