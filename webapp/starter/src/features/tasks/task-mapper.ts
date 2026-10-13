@@ -2,7 +2,7 @@
 // Her mapper vi data som kommer fra databasen og som skal videre gjennom
 // systemet. Omitter også verdier som av ulike grunner ikke skal med videre
 
-import { Task } from "@/db/schema";
+import type { Task } from "@/db/schema";
 
 export type TaskDTO = {
   id: string;

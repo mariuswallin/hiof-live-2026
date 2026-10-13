@@ -24,13 +24,14 @@ export interface TaskRepository {
 
 export function createTaskRepository(_db: DB): TaskRepository {
   return {
-    create: async (data) => {
+    async create(data) {
       try {
         const createTask = await _db
           .insert(tasks)
           .values(data)
           .returning()
           .get();
+
         return {
           ok: true,
           data: createTask,
@@ -41,22 +42,18 @@ export function createTaskRepository(_db: DB): TaskRepository {
           ok: false,
           error: {
             code: 500,
-            message: "Noe gikk galt i databasen",
+            message: "Noe gikk galt med koden",
             fieldErrors: {},
           },
         };
       }
+    }, // implement thi,
+    list: () => {
+      // her skriver jeg ren sql
     },
-    update: async (id, task) => {
-      throw new Error("Not implemented");
+    get: (id) => {
+      // her bruker prisma
     },
-    get: async (id) => {
-      throw new Error("Not implemented");
-    },
-    list: async () => {
-      throw new Error("Not implemented");
-    },
-    remove: async (id) => {},
   };
 }
 

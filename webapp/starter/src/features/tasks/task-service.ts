@@ -34,6 +34,16 @@ export interface TaskService {
   remove(user: any, id: string): Promise<any>;
 }
 
+// export interface BaseService<T> {
+//   list(user: T): Promise<T>
+// }
+
+// interface A extends BaseService<User> {
+
+// }
+
+// interface B extends BaseService<Tasks> {}
+
 export function createTaskService(_repository: TaskRepository): TaskService {
   return {
     async list(user) {
@@ -42,7 +52,7 @@ export function createTaskService(_repository: TaskRepository): TaskService {
       // Her kaller vi repository.findMany()
       // Her returnerer vi resultatet av det vi fikk fra repository
     },
-    async create(user, data: unknown) {
+    async create(data: unknown) {
       const parsed = createTaskSchema.safeParse(data);
       if (!parsed.success) {
         return {
@@ -55,30 +65,22 @@ export function createTaskService(_repository: TaskRepository): TaskService {
         };
       }
 
-      const { duedate, ...taskData } = parsed.data;
+      // const rule = validateTask(parsed.data)
+      // if (!rule.ok) {
+
+      // }
+
       const result = await _repository.create({
-        ...taskData,
-        dueDate: duedate,
+        ...parsed.data,
         userId: user.id,
       });
 
-      if (!result.ok) {
-        return result;
-      }
+      if (!result.ok) return result;
 
       return {
         ok: true,
         data: toTaskDTO(result.data),
       };
-    },
-    async get(user, id) {
-      throw new Error("Not implemented");
-    },
-    async update(user, id, input) {
-      throw new Error("Not implemented");
-    },
-    async remove(user, id) {
-      throw new Error("Not implemented");
     },
   };
 }
