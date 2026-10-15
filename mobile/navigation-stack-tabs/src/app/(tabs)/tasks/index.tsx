@@ -1,9 +1,6 @@
 import { Link, Stack } from "expo-router";
 import { Pressable, StyleSheet, Text } from "react-native";
 
-import { Empty } from "@/components/shared/Empty";
-import { Loading } from "@/components/shared/Loading";
-import { Screen } from "@/components/shared/Screen";
 import { TaskList } from "@/components/tasks/TaskList";
 import { Theme } from "@/constants/theme";
 import { useTasks } from "@/contexts/TasksContext";
@@ -15,10 +12,13 @@ import { useTasks } from "@/contexts/TasksContext";
  *
  * Nytt her: hver rad er en <Link> til detaljsiden (se TaskItem.tsx), og
  * "ny oppgave" er flyttet til en egen skjerm som åpnes med + i headeren.
+ *
+ * Lista er hentet fra API-et (listTodos) i TasksContext, med use() +
+ * Suspense. Derfor ingen laster- eller feil-tilstand HER: rendres skjermen,
+ * er lista klar. (Sammenlign med users/index.tsx, som må sjekke selv.)
  */
 export default function TasksScreen() {
-  // isLoading/error kommer fra hentingen i TasksContext (useEffect).
-  const { tasks, toggle, isLoading, error } = useTasks();
+  const { tasks, toggle } = useTasks();
 
   return (
     <>
@@ -40,18 +40,7 @@ export default function TasksScreen() {
         }}
       />
 
-      {/* Tre tilstander: laster -> feil -> data. TaskList får bare data. */}
-      {isLoading ? (
-        <Screen>
-          <Loading label="Henter oppgaver ..." />
-        </Screen>
-      ) : error ? (
-        <Screen>
-          <Empty title="Klarte ikke å hente oppgaver" hint={error} />
-        </Screen>
-      ) : (
-        <TaskList tasks={tasks} onToggle={toggle} />
-      )}
+      <TaskList tasks={tasks} onToggle={toggle} />
     </>
   );
 }

@@ -68,7 +68,7 @@ test("navigerer fra lista til detalj og videre til eier", async ({ page }) => {
   await page.getByText("Prøve FlatList").click();
   await expect(page).toHaveURL(/\/tasks\/3$/);
 
-  // 3. Detaljsiden viser MOCK-dataene (hentet med useEffect).
+  // 3. Detaljsiden viser MOCK-dataene (hentet med use() + Suspense).
   await expect(page.getByText("«Mocket todo fra testen»")).toBeVisible();
 
   // 4. Videre til eieren -> userId fra API-svaret havner i URL-en.
@@ -137,7 +137,8 @@ test("dynamisk rute utenfor tabs kan åpnes direkte", async ({ page }) => {
 });
 
 test("viser feilmelding når API-et feiler", async ({ page }) => {
-  // Lista går bra, men enkelt-oppgaven (useEffect i [id].tsx) svarer 500.
+  // Lista går bra, men enkelt-oppgaven (use() i [id].tsx) svarer 500.
+  // Feilen havner i ErrorBoundary-eksporten i [id].tsx.
   await page.route("https://dummyjson.com/**", (route) => {
     const path = new URL(route.request().url()).pathname;
 
@@ -147,18 +148,25 @@ test("viser feilmelding når API-et feiler", async ({ page }) => {
 
   await page.goto("/tasks/3");
 
+  // exact: i dev viser LogBox også feilen i en toast nederst - den har mer
+  // tekst rundt, så exact treffer bare meldingen i ErrorBoundary.
   await expect(page.getByText("Klarte ikke å hente")).toBeVisible();
-  await expect(page.getByText("Kunne ikke hente /todos/3 (500)")).toBeVisible();
+  await expect(
+    page.getByText("Kunne ikke hente /todos/3 (500)", { exact: true }),
+  ).toBeVisible();
 });
 
 test("viser feilmelding når lista ikke kan hentes", async ({ page }) => {
-  // Alt svarer 500 - også GET /todos i TasksContext.
+  // Alt svarer 500 - også GET /todos i TasksContext. use() kaster, og
+  // feilen havner i ErrorBoundary-eksporten i rot-_layout.tsx.
   await page.route("https://dummyjson.com/**", (route) =>
     route.fulfill({ status: 500 }),
   );
 
   await page.goto("/tasks");
 
-  await expect(page.getByText("Klarte ikke å hente oppgaver")).toBeVisible();
-  await expect(page.getByText("Kunne ikke hente oppgaver (500)")).toBeVisible();
+  await expect(page.getByText("Noe gikk galt")).toBeVisible();
+  await expect(
+    page.getByText("Kunne ikke hente /todos?limit=8 (500)", { exact: true }),
+  ).toBeVisible();
 });

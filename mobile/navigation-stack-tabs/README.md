@@ -6,7 +6,7 @@ Kopi av `mobile/navigation`, men **uten skuff (Drawer) og modal**. Bare to navig
 - **Stack** – skjermer som legges oppå hverandre (med tilbake-knapp)
 - **Detaljside** – dynamisk rute `[id]`, både inne i en tab og i en egen mappe utenfor tabs (`users/[userId]`)
 - **Layout** – `_layout.tsx`-filer som bestemmer rammen rundt skjermene
-- **Henting fra API** basert på id i URL-en – én gang med `useEffect`, én gang med TanStack Query
+- **Henting fra API** med `list`/`getById` fra `api/dummy-json.ts` – på tre måter: «gammel» React (`useEffect` + `useState`, i `users/`), moderne React 19 (`use()` + Suspense + Expo Routers `SuspenseFallback`/`ErrorBoundary`, i `tasks/`) og TanStack Query (eier-siden)
 
 Alt annet (komponenter, contexter, API, tester) er det samme som i `mobile/navigation`.
 Se [Forskjeller fra `mobile/navigation`](#6-forskjeller-fra-mobilenavigation).
@@ -70,21 +70,22 @@ den ene inne i en tab, den andre utenfor.
 
 | Fil | Hva den gjør | Nøkkelbegreper |
 | --- | --- | --- |
-| `_layout.tsx` | Rot-Stack. Pakker hele appen i providers (`QueryClientProvider`, `AuthProvider`, `TasksProvider`). `RootNavigator` viser «Henter bruker …» til rollen er kjent, og beskytter `admin` med `Stack.Protected`. Registrerer `(tabs)` og `users` uten header, og `new-task`, `settings` og `about` som vanlige Stack-skjermer. `initialRouteName: "(tabs)"` legger tabs under når en skjerm utenfor tabs åpnes direkte. | `Stack`, providers over navigatoren, `unstable_settings` |
+| `_layout.tsx` | Rot-Stack. Pakker hele appen i providers (`QueryClientProvider`, `AuthProvider`, `TasksProvider`). `<Suspense>` rundt `TasksProvider` viser «Henter oppgaver …» mens `use()` venter, og `ErrorBoundary`-eksporten viser feil med «Prøv igjen». `RootNavigator` viser «Henter bruker …» til rollen er kjent, og beskytter `admin` med `Stack.Protected`. Registrerer `(tabs)` og `users` uten header, og `new-task`, `settings` og `about` som vanlige Stack-skjermer. `initialRouteName: "(tabs)"` legger tabs under når en skjerm utenfor tabs åpnes direkte. | `Stack`, providers over navigatoren, `unstable_settings`, `Suspense`, `ErrorBoundary` |
 | `new-task.tsx` | Vanlig Stack-skjerm som bruker `TaskRegister` (samme skjema som i hiof-live-2026). Validerer tittelen med zod, kaller `add()` og går tilbake med `router.back()`. | Stack-skjerm utenfor tabs, `router.back()`, context |
-| `settings.tsx` | Skjerm i rot-Stacken, utenfor `(tabs)/` – derfor ingen tab-bar, men tilbake-knapp. | skjerm utenfor tabs |
+| `settings.tsx` | Skjerm i rot-Stacken, utenfor `(tabs)/` – derfor ingen tab-bar, men tilbake-knapp. Viser innlogget bruker fra **custom hook** `useCurrentUser()` – hentes på nytt hver gang skjermen åpnes. | skjerm utenfor tabs, custom hook |
 | `about.tsx` | Enda en skjerm utenfor tabs. | |
 | `admin.tsx` | **Beskyttet** skjerm, kun for admin. Ligger i rot-Stacken, så den kan åpnes fra hvor som helst. Beskyttes av `<Stack.Protected guard={isAdmin}>` i `_layout.tsx` – skjermen sjekker ikke rollen selv. Knapp som bytter til vanlig bruker viser at man kastes ut. | `Stack.Protected`, `guard` |
 | `+not-found.tsx` | Fallback for ukjente URL-er, med lenke til `/`. | `+not-found` |
 | `users/_layout.tsx` | Stack for en mappe **utenfor tabs** – samme mønster som `tasks/_layout.tsx`. `initialRouteName: "index"` legger lista under når `/users/68` åpnes direkte. | Stack utenfor tabs, nøstet Stack |
-| `users/index.tsx` | Lista over brukere (`/users`), hentet med `useQuery` (`fetchUsers`). Hver rad er en `UserItem`. | `useQuery`, `FlatList` |
-| `users/[userId].tsx` | **Dynamisk rute utenfor tabs.** Henter brukeren med samme `queryKey` som `tasks/user/[userId].tsx` (delt cache). «Neste bruker» åpner samme fil med ny parameter (`Link push`). | `useLocalSearchParams`, `Number(param)`, `push` || `(tabs)/_layout.tsx` | Tab-baren: Hjem, Oppgaver, Profil. Ikoner og badge med antall åpne oppgaver. | `Tabs`, `tabBarIcon`, `tabBarBadge` |
+| `users/index.tsx` | Lista over brukere (`/users`), hentet på den **«gamle» måten**: `useState` + `useEffect` + `AbortController` (`listUsers`). Hver rad er en `UserItem`. | `useEffect`, `FlatList` |
+| `users/[userId].tsx` | **Dynamisk rute utenfor tabs.** Henter brukeren med `useEffect` (`getUser`), uten cache. «Neste bruker» åpner samme fil med ny parameter (`Link push`). | `useLocalSearchParams`, `Number(param)`, `push`, `useEffect` |
+| `(tabs)/_layout.tsx` | Tab-baren: Hjem, Oppgaver, Profil. Ikoner og badge med antall åpne oppgaver. | `Tabs`, `tabBarIcon`, `tabBarBadge` |
 | `(tabs)/index.tsx` | Hjem (`/`). Hilser på innlogget bruker (`useAuth()`), viser status og **alle måtene å navigere på**: `Link` til annen tab, rett inn på `/tasks/3`, lenke til skjerm utenfor tabs, `router.push` til «Ny oppgave», lenker til `/users` og rett til `/users/68`. | `Link`, `router.push/replace/back` |
 | `(tabs)/profile.tsx` | Enkel tab uten egen Stack. Viser innlogget bruker fra `useAuth()`, knapp som henter brukeren på nytt, lenker til `/settings` og `/about`. | tab uten stack, `useAuth()` |
-| `(tabs)/tasks/_layout.tsx` | Stack **inne i** Oppgaver-taben. Tilbake-knapp på alt over lista. `initialRouteName: "index"` sørger for at lista alltid ligger under detaljsiden. | Stack i tab, `unstable_settings` |
-| `(tabs)/tasks/index.tsx` | Lista: `<TaskList tasks={tasks} onToggle={toggle} />`, som i demoens `index.tsx`. Legger til `+` i headeren med `<Stack.Screen options>` fra selve skjermen. | skjerm styrer egen header |
-| `(tabs)/tasks/[id].tsx` | **Detaljsiden.** Leser `id` fra URL-en, slår opp oppgaven i context, dynamisk tittel, fullfør/slett. `RemoteTodo` henter `dummyjson.com/todos/:id` med **`useEffect`**, viser et bilde bygget fra svaret, og sender `userId` videre med en `Link`. | `useLocalSearchParams`, `useEffect`, `AbortController`, `key`, `Image` |
-| `(tabs)/tasks/user/[userId].tsx` | Tredje nivå i stacken. Henter `dummyjson.com/users/:userId` med **TanStack Query**. Kommentaren øverst sammenligner med `useEffect`. Viser brukeren med `UserInfo`. | `useQuery`, `queryKey`, cache |
+| `(tabs)/tasks/_layout.tsx` | Stack **inne i** Oppgaver-taben. Tilbake-knapp på alt over lista. `initialRouteName: "index"` sørger for at lista alltid ligger under detaljsiden. `SuspenseFallback`-eksporten er laster-skjermen for barna mens de venter på `use()`. | Stack i tab, `unstable_settings`, `SuspenseFallback` |
+| `(tabs)/tasks/index.tsx` | Lista: `<TaskList tasks={tasks} onToggle={toggle} />`, som i demoens `index.tsx`. Ingen laster-/feilsjekk – Suspense i `_layout.tsx` tar seg av det. Legger til `+` i headeren med `<Stack.Screen options>` fra selve skjermen. | skjerm styrer egen header |
+| `(tabs)/tasks/[id].tsx` | **Detaljsiden.** Leser `id` fra URL-en, slår opp oppgaven i context, dynamisk tittel, fullfør/slett. Henter `dummyjson.com/todos/:id` med **`use(cached(...))`** – etter en `if`/`return`. Venter → `SuspenseFallback` fra layouten, feiler → egen `ErrorBoundary`-eksport med «Prøv igjen». Viser et bilde bygget fra svaret, og sender `userId` videre med en `Link`. | `useLocalSearchParams`, `use()`, `ErrorBoundary`, `Image` |
+| `(tabs)/tasks/user/[userId].tsx` | Tredje nivå i stacken. Henter `dummyjson.com/users/:userId` med **TanStack Query**. Kommentaren øverst sammenligner med `useEffect` i `users/[userId].tsx`. Viser brukeren med `UserInfo`. | `useQuery`, `queryKey`, cache |
 
 ### `src/components/` – gjenbrukbare byggeklosser
 
@@ -109,10 +110,13 @@ Samme mapper og filnavn som i `mobile/demo` og `mobile/navigation` (`tasks/` og
 
 | Fil | Hva den gjør |
 | --- | --- |
-| `contexts/TasksContext.tsx` | Samme `TasksProvider` + `useTasks()` som i demoen (`toggle`, `add(task)`), pluss `remove`. **Henter oppgavene fra `dummyjson.com/todos` med `useEffect`** (fetch → `response.ok` → JSON → zod → `Todo` til `Task`), med `isLoading`/`error`. Nå nødvendig: skjermene lages av ruteren og **kan ikke få props**. |
+| `contexts/TasksContext.tsx` | Samme `TasksProvider` + `useTasks()` som i demoen (`toggle`, `add(task)`), pluss `remove`. **Henter oppgavene med `use(cached(TASKS_KEY, loadTasks))`** (`listTodos` → `Todo` til `Task`) – ingen `isLoading`/`error`; `useState(initialTasks)` når lista er klar. Nå nødvendig: skjermene lages av ruteren og **kan ikke få props**. |
 | `contexts/AuthContext.tsx` | `AuthProvider` + `useAuth()`: `user`, `isLoading`, `isAdmin`, `reload`, `loginAs(role)`. Henter innlogget bruker **ved hver oppstart/refresh** og legger den i context. Kommentaren øverst forklarer hvor lenge brukeren «lever». |
+| `contexts/AuthContextV2.tsx` | **Ny versjon** av `AuthContext.tsx` (som står urørt): samme `AuthProvider` + `useAuth()`, men hentingen ligger i `useCurrentUser()`. Provideren kaller hooken én gang og deler resultatet. Brukes ikke av appen – bytt importen i `_layout.tsx`, `(tabs)/index.tsx`, `(tabs)/profile.tsx` og `admin.tsx` for å prøve. |
+| `hooks/useCurrentUser.ts` | **Custom hook**: `useState` + `useEffect` rundt `fetchCurrentUser()`. Gir `user`, `isLoading`, `isAdmin`, `reload`, `refetch` – samme form som `useAuth()` (minus `loginAs`). Duplikat av `AuthProvider` med vilje: staten bor i komponenten, så hver skjerm får sin egen kopi og egen henting. |
 | `api/auth.ts` | `AuthUserSchema` (bruker + `role: "admin" \| "user"`). `fetchCurrentUser()` – **simulert** `GET /me` (800 ms, validert med zod). To kontoer: Ola (`user`, standard) og Kari (`admin`). `simulateLogin(role)` bytter konto. Logger `[auth] Henter …` så man ser *når* den kjører. |
-| `api/dummy-json.ts` | Zod-skjemaer (`TodoSchema`, `TodosResponseSchema`, `UserSchema`, `UsersResponseSchema`), `fetchTodo(id)`, `fetchUser(id)` og `fetchUsers()`. Sjekker `response.ok` (fetch kaster ikke ved 404) og validerer svaret med zod. Tar imot `signal` så forespørselen kan avbrytes. |
+| `api/dummy-json.ts` | Zod-skjemaer (`TodoSchema`, `UserSchema`) og to generiske hjelpere: `list(ressurs, skjema)` (`GET /users` → pakker ut `{ users: [...] }`) og `getById(ressurs, id, skjema)`. Ferdige kall: `listUsers`, `getUser`, `listTodos`, `getTodo`. Sjekker `response.ok` (fetch kaster ikke ved 404) og validerer svaret med zod. Tar imot `signal` så forespørselen kan avbrytes. |
+| `api/cache.ts` | `cached(key, load)` – samme promise for samme nøkkel, som `use()` krever. `forget(key)` brukes av «Prøv igjen». |
 | `constants/theme.ts` | Farger, avstander, radius, skriftstørrelser (samme som demoen). |
 | `utils/task-schema.ts` | Demoens `TaskSchema` (+ `trim()` og norske feilmeldinger) og `NewTaskSchema` (= alt unntatt `id`). |
 
@@ -144,9 +148,10 @@ Stacken har egen header. Vis `+` i headeren (skjermen styrer egen header).
 `components/tasks/TaskItem.tsx`: `href={{ pathname: "/tasks/[id]", params: { id } }}` og
 `asChild`. Trykk på raden → detalj. Trykk på boksen → bare toggle.
 
-**Steg 5 – Detaljside + `useEffect`**
+**Steg 5 – Detaljside + `use()`**
 `tasks/[id].tsx`: `useLocalSearchParams`, dynamisk tittel, `router.back()` ved slett.
-Gå gjennom `RemoteTodo`: `useState` for data og feil (laster = ingen av delene ennå), `AbortController`, opprydding, `key={id}`.
+`use(cached(...))` etter `if (!task) return`, `SuspenseFallback` i `tasks/_layout.tsx`,
+`ErrorBoundary`-eksporten. Gå tilbake og inn igjen: ingen laster-skjerm (cache).
 
 **Steg 6 – Videre i stacken + TanStack Query**
 Trykk «Se hvem som eier den» → `user/[userId].tsx`. Sammenlign tabellen i kommentaren.
@@ -156,8 +161,8 @@ Gå tilbake og inn igjen: data vises med en gang (cache).
 `+` → `new-task.tsx`. Samme `TaskRegister` som før – bare lagt i en egen Stack-skjerm som
 går tilbake etterpå. Tab-baren er borte, fordi skjermen ligger i rot-Stacken. Legg til en
 oppgave → lista og badgen oppdateres. Profil → Innstillinger/Om appen: samme prinsipp.
-Forklar `contexts/TasksContext.tsx`: `useEffect` henter lista fra dummyjson ved oppstart –
-gå gjennom steg 1–5 i kommentarene. Åpne den nye oppgaven: API gir 404 → feil-tilstand.
+Forklar `contexts/TasksContext.tsx`: `use()` henter lista ved oppstart, `<Suspense>` i
+`_layout.tsx` viser «Henter oppgaver …». Åpne den nye oppgaven: API gir 404 → `ErrorBoundary`.
 
 **Steg 8 – Navigere på tvers**
 Hjem-taben: `Link` til annen tab, rett til `/tasks/3` (tilbake virker takket være
@@ -167,14 +172,15 @@ Hjem-taben: `Link` til annen tab, rett til `/tasks/3` (tilbake virker takket væ
 `users/_layout.tsx`, `users/index.tsx`, `users/[userId].tsx`. Samme mønster som `tasks/`,
 men i rot-Stacken: ingen tab-bar. Skriv `/users/68` i adressefeltet – ingen tab er
 involvert, og «tilbake» går likevel til lista (`initialRouteName`). «Neste bruker» åpner
-samme fil med ny parameter. Åpne eieren av oppgave 3 først → `/users/68` vises med en gang
-(samme `queryKey`).
+samme fil med ny parameter. Her hentes med `useEffect` + `useState` – sammenlign med
+`tasks/`: tre tilstander for hånd, og ny henting hver gang.
 
 **Steg 10 – Innlogget bruker i context**
 `contexts/AuthContext.tsx`: les livsløpet i kommentaren. Start appen og se
 `[auth] Henter innlogget bruker` i konsollen – én gang. Bytt tab, åpne detalj og
 «Ny oppgave»: ingen ny henting. Refresh (F5 / «r» i Metro): borte fra minnet → hentes
-på nytt. «Hent bruker på nytt» på Profil simulerer det samme.
+på nytt. «Hent bruker på nytt» på Profil simulerer det samme. Åpne Innstillinger: den
+bruker custom hooken `useCurrentUser()` – ny logglinje *hver* gang skjermen åpnes.
 
 **Steg 11 – Rolle og beskyttet rute**
 `_layout.tsx`: `<Stack.Protected guard={isAdmin}>` rundt `admin`. Som Ola (`user`): ingen
@@ -196,7 +202,7 @@ Mer detaljert gjennomgang med «Prøv» og spørsmål per steg: se `STEPS.md`.
 | `TaskList` med `TaskRegister` inni, `.map` | `TaskList` med `FlatList`, `TaskRegister` på egen skjerm |
 | `TaskItem`: hele raden toggler | `TaskItem`: raden er en `Link`, boksen toggler |
 | `TaskLayout` tegner header | Navigatoren tegner header og tab-bar |
-| `useState(TASKS)` – data fra lokal konstant | `useState([])` + `useEffect` – lista hentes fra API i `TasksContext`. Også `useQuery` og innlogget bruker med rolle (`AuthContext`) |
+| `useState(TASKS)` – data fra lokal konstant | `use()` + Suspense – lista hentes fra API i `TasksContext`. Også `useEffect` (`users/`), `useQuery` og innlogget bruker med rolle (`AuthContext`) |
 | Ingen tilgangsstyring | `/admin` beskyttet med `Stack.Protected` |
 
 ## 6. Forskjeller fra `mobile/navigation`
@@ -370,20 +376,31 @@ Endringene, ja. Lista hentes fra API-et ved hver oppstart, men `toggle`/`add`/`r
 endrer bare state i minnet – API-et vet ingenting. Skal endringer overleve, må de sendes
 til API-et (POST/PATCH/DELETE) eller lagres lokalt (AsyncStorage/SQLite).
 
+**Hva er forskjellen på en custom hook og en context?**
+En custom hook (`hooks/useCurrentUser.ts`) gjenbruker *logikk* – hver komponent som kaller
+den får sin egen state og sin egen henting. En context (`useAuth()`) deler *state* – én
+henting i provideren, samme verdi overalt. Bytt konto på Profil: `useAuth()` oppdateres
+over alt, `useCurrentUser()` i Innstillinger først neste gang skjermen åpnes. Derfor bruker
+`Stack.Protected` context. `contexts/AuthContextV2.tsx` kombinerer dem: hooken kalles én
+gang i provideren, og context deler resultatet.
+
 ### Henting av data
 
-**Hvorfor `useEffect` ett sted og TanStack Query et annet?**
-For å vise begge. `useEffect` viser hva som faktisk skjer (og hvor mye man må huske selv).
-TanStack Query viser hva man bruker i praksis.
+**Hvorfor `useEffect`, `use()` og TanStack Query?**
+For å vise alle tre. `useEffect` (`users/`) viser hva som faktisk skjer – og hvor mye man
+må huske selv. `use()` + Suspense (`tasks/`) er React 19 sin måte: komponenten venter, og
+laster/feil håndteres av `<Suspense>`/`ErrorBoundary` utenfor. TanStack Query (eier-siden)
+er det man ofte bruker i praksis.
+
+**Hvorfor `cached()` rundt promiset til `use()`?**
+`use()` krever samme promise ved hver render. `use(getTodo(id))` rett i komponenten
+starter et nytt kall ved hver render – evig løkke. `api/cache.ts` gir samme promise for
+samme nøkkel.
 
 **Hva gjør `AbortController`?**
 Går brukeren tilbake før svaret kommer, avbrytes forespørselen. Uten den kan et gammelt
 svar komme inn og sette state på en skjerm som ikke finnes – eller overskrive nyere data
 hvis `id` har endret seg.
-
-**Hvorfor `key={task.id}` på `RemoteTodo`?**
-Ny `key` = React lager komponenten på nytt med tom state. Da slipper vi å nullstille
-`todo`/`error` manuelt inne i effekten (som lint-regelen advarer mot).
 
 **Hvorfor kjører effekten to ganger i dev?**
 React Strict Mode kjører effekter to ganger i utvikling for å avsløre manglende

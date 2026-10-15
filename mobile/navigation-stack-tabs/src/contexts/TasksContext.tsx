@@ -1,14 +1,15 @@
-import { createContext, use, useEffect, useState, type ReactNode } from "react";
+import { createContext, use, useState, type ReactNode } from "react";
 
-import { TodosResponseSchema, type Todo } from "@/api/dummy-json";
+import { cached } from "@/api/cache";
+import { listTodos, type Todo } from "@/api/dummy-json";
 import type { Task } from "@/utils/task-schema";
 
 /**
  * Samme TasksContext som i demo-appen: TasksProvider i rot-_layout.tsx og
  * useTasks() der dataene trengs. Nytt her:
  *
- * - Oppgavene HENTES fra et eksternt API med useEffect, i stedet for å
- *   starte med TASKS-konstanten. Derfor også isLoading og error.
+ * - Oppgavene HENTES fra et eksternt API, i stedet for å starte med
+ *   TASKS-konstanten. Med React 19 sin use() + <Suspense> - se under.
  * - remove(), så detaljsiden kan slette.
  *
  * I demoen var Context "kjekt å ha" - alt lå på én skjerm, så props hadde
@@ -17,21 +18,15 @@ import type { Task } from "@/utils/task-schema";
  * og kan derfor ikke gi dem props.
  */
 type TaskContextData = {
+  // Ingen isLoading/error! Mens lista hentes, finnes ikke provideren ennå -
+  // React viser Suspense-fallbacken i stedet (se _layout.tsx).
   tasks: Task[];
-  isLoading: boolean;
-  error: string | null;
   toggle: (id: string) => void;
   add: (task: Omit<Task, "id">) => void;
   remove: (id: string) => void;
 };
 
 const TasksContext = createContext<TaskContextData | null>(null);
-
-/**
- * Et gratis placeholder-API med falske todos. Åpne URL-en i nettleseren for
- * å se hva vi får tilbake. ?limit=8 = bare de 8 første (id 1-8).
- */
-const TODOS_URL = "https://dummyjson.com/todos?limit=8";
 
 /**
  * API-et og appen har ulike "språk" for samme ting:
@@ -51,69 +46,35 @@ function toTask(todo: Todo): Task {
   return { id: String(todo.id), title: todo.todo, done: todo.completed };
 }
 
+/** Nøkkelen i cachen (api/cache.ts). ErrorBoundary i _layout.tsx glemmer den. */
+export const TASKS_KEY = "tasks";
+
+/** Henter lista og oversetter den til appens format. */
+async function loadTasks() {
+  const todos = await listTodos();
+  return todos.map(toTask);
+}
+
 export function TasksProvider({ children }: { children: ReactNode }) {
-  // Før (demoen): useState(TASKS) - dataene fantes med en gang.
-  // Nå: lista er TOM til API-et har svart. Derfor tre tilstander:
-  const [tasks, setTasks] = useState<Task[]>([]); // dataene
-  const [isLoading, setIsLoading] = useState(true); // venter vi på svar?
-  const [error, setError] = useState<string | null>(null); // gikk noe galt?
-
   /**
-   * HENTING MED useEffect
+   * HENTING MED use() - React 19
    *
-   * Hvorfor ikke bare kalle fetch rett i komponenten? Fordi komponenten
-   * kjøres på nytt ved HVER render. fetch der = ny forespørsel hver gang
-   * state endres (og setTasks gir en ny render ... evig løkke).
+   * Før: useState([]) + isLoading + error + useEffect med AbortController,
+   * og ALLE skjermer måtte sjekke isLoading før de viste noe.
    *
-   * useEffect kjører koden ETTER at skjermen er tegnet. Tomt dependency-
-   * array [] = bare én gang, når provideren mountes. Provideren ligger over
-   * navigatoren og mountes én gang per oppstart/refresh - akkurat som
-   * AuthProvider. Bytt tab og kom tilbake: ingen ny henting.
+   * Nå: use(promise) "pakker ut" verdien til et promise.
+   * - Venter det:  komponenten SUSPENDERER - React viser nærmeste
+   *                <Suspense fallback> (her i _layout.tsx).
+   * - Er det klart: use() gir oss lista, og koden fortsetter som vanlig.
+   * - Feilet det:  feilen kastes til nærmeste ErrorBoundary (_layout.tsx).
+   *
+   * cached(): use() trenger SAMME promise ved hver render (se api/cache.ts).
    */
-  useEffect(() => {
-    // AbortController: lar oss avbryte forespørselen hvis provideren
-    // forsvinner før svaret kommer (se oppryddingen nederst).
-    const controller = new AbortController();
+  const initialTasks = use(cached(TASKS_KEY, loadTasks));
 
-    // useEffect kan ikke være async selv, så vi lager en async-funksjon
-    // inni og kaller den.
-    async function loadTasks() {
-      try {
-        // 1. Send forespørselen. signal kobler den til controlleren.
-        const response = await fetch(TODOS_URL, { signal: controller.signal });
-
-        // 2. fetch kaster IKKE ved 404/500 - bare ved nettverksfeil.
-        //    Derfor må vi sjekke statuskoden selv.
-        if (!response.ok) {
-          throw new Error(`Kunne ikke hente oppgaver (${response.status})`);
-        }
-
-        // 3. Les body som JSON. Vi VET ikke hva som kom - det er `unknown`.
-        const json: unknown = await response.json();
-
-        // 4. Valider med zod. Feil form -> parse() kaster -> havner i catch.
-        //    Etterpå vet TypeScript at `todos` er Todo[].
-        const { todos } = TodosResponseSchema.parse(json);
-
-        // 5. Oversett til appens format og legg i state. Alle skjermer som
-        //    bruker useTasks() rendres på nytt med lista.
-        setTasks(todos.map(toTask));
-      } catch (e) {
-        // Avbrudd er ikke en feil - det var vi som ba om det.
-        if (controller.signal.aborted) return;
-        setError(e instanceof Error ? e.message : "Ukjent feil");
-      } finally {
-        // Ferdig - uansett om det gikk bra eller ikke.
-        if (!controller.signal.aborted) setIsLoading(false);
-      }
-    }
-
-    loadTasks();
-
-    // Opprydding: kjøres når provideren unmountes. I utvikling kjører React
-    // effekten to ganger (Strict Mode) - da avbrytes den første hentingen.
-    return () => controller.abort();
-  }, []);
+  // Hit kommer vi bare når lista ER hentet. Den blir startverdien til vanlig
+  // state, så toggle/add/remove virker akkurat som før.
+  const [tasks, setTasks] = useState(initialTasks);
 
   // NB: toggle/add/remove endrer bare LOKAL state - API-et vet ingenting.
   // Etter en refresh hentes originallista på nytt, og endringene er borte.
@@ -141,7 +102,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <TasksContext value={{ tasks, isLoading, error, toggle, add, remove }}>
+    <TasksContext value={{ tasks, toggle, add, remove }}>
       {children}
     </TasksContext>
   );

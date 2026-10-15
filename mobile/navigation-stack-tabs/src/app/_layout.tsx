@@ -1,11 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, type ErrorBoundaryProps } from "expo-router";
+import { Suspense } from "react";
 import { StyleSheet, View } from "react-native";
 
+import { forget } from "@/api/cache";
+import { Empty } from "@/components/shared/Empty";
 import { Loading } from "@/components/shared/Loading";
 import { Theme } from "@/constants/theme";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { TasksProvider } from "@/contexts/TasksContext";
+import { TASKS_KEY, TasksProvider } from "@/contexts/TasksContext";
 
 /**
  * ROT-LAYOUTEN - det ytterste laget i appen.
@@ -47,6 +50,32 @@ export const unstable_settings = {
   initialRouteName: "(tabs)",
 };
 
+/**
+ * FEIL-SKJERM - en Expo Router-konvensjon: eksporter ErrorBoundary fra en
+ * rutefil, så pakker ruteren den inn i en React error boundary.
+ *
+ * Kaster noe under her som ingen nærmere ErrorBoundary fanger, vises denne i
+ * stedet for appen. Typisk: use() i TasksProvider når GET /todos feiler.
+ *
+ * "Prøv igjen": glem promiset som feilet (se api/cache.ts), og la retry()
+ * rendre layouten på nytt. Da starter use() en ny henting.
+ */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return (
+    <View style={styles.loading}>
+      <Empty
+        title="Noe gikk galt"
+        hint={error.message}
+        actionLabel="Prøv igjen"
+        onPress={() => {
+          forget(TASKS_KEY);
+          retry();
+        }}
+      />
+    </View>
+  );
+}
+
 // Én QueryClient for hele appen. Lages UTENFOR komponenten, ellers får vi en
 // ny (og tom cache) ved hver render.
 const queryClient = new QueryClient();
@@ -65,9 +94,25 @@ export default function RootLayout() {
           useAuth() for å vite HVEM den skal hente for.
       */}
       <AuthProvider>
-        <TasksProvider>
-          <RootNavigator />
-        </TasksProvider>
+        {/*
+          SUSPENSE (React 19): TasksProvider henter lista med use(). Mens den
+          venter, vises fallback i stedet for alt inni <Suspense>. Ingen
+          skjerm trenger egen "laster"-sjekk for oppgavene.
+
+          Inni AuthProvider, ikke utenfor: da mountes AuthProvider med en
+          gang, og brukeren og oppgavene hentes SAMTIDIG.
+        */}
+        <Suspense
+          fallback={
+            <View style={styles.loading}>
+              <Loading label="Henter oppgaver ..." />
+            </View>
+          }
+        >
+          <TasksProvider>
+            <RootNavigator />
+          </TasksProvider>
+        </Suspense>
       </AuthProvider>
     </QueryClientProvider>
   );

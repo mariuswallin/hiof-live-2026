@@ -1,8 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link, Stack, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text } from "react-native";
 
-import { fetchUser } from "@/api/dummy-json";
+import { getUser, type User } from "@/api/dummy-json";
 import { Card } from "@/components/shared/Card";
 import { Empty } from "@/components/shared/Empty";
 import { Loading } from "@/components/shared/Loading";
@@ -19,31 +19,44 @@ import { Theme } from "@/constants/theme";
  * Forskjellen er HVOR fila ligger. tasks/[id].tsx er inne i Oppgaver-taben
  * (tab-baren står), denne er i rot-Stacken (ingen tab-bar). Prøv å åpne
  * /users/68 rett fra adressefeltet - ingen tab er involvert.
+ *
+ * Hentet på den "GAMLE" måten, som users/index.tsx: useState + useEffect.
+ * Ingen cache - går du tilbake og inn igjen, hentes brukeren på nytt.
  */
 export default function UserDetailScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
 
-  const { data: user, isPending, error } = useQuery({
-    // SAMME queryKey som i tasks/user/[userId].tsx. Har du sett eieren av
-    // en oppgave, ligger brukeren allerede i cachen - og vises med en gang
-    // her, selv om skjermen ligger et helt annet sted i rutetreet.
-    queryKey: ["user", userId],
-    queryFn: ({ signal }) => fetchUser(userId, signal),
-  });
+  // null = ikke hentet ennå. Laster = verken user eller error er satt.
+  const [user, setUser] = useState<User | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  if (isPending) {
-    return (
-      <Screen>
-        <Loading label="Henter bruker ..." />
-      </Screen>
-    );
-  }
+  // Kjører etter første render, og på nytt hvis userId endres.
+  useEffect(() => {
+    const controller = new AbortController();
+
+    getUser(userId, controller.signal)
+      .then(setUser)
+      .catch((e: unknown) => {
+        if (controller.signal.aborted) return;
+        setError(e instanceof Error ? e.message : "Ukjent feil");
+      });
+
+    return () => controller.abort();
+  }, [userId]);
 
   if (error) {
     return (
       <Screen>
         <Stack.Screen options={{ title: "Finnes ikke" }} />
-        <Empty title="Klarte ikke å hente" hint={error.message} />
+        <Empty title="Klarte ikke å hente" hint={error} />
+      </Screen>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Screen>
+        <Loading label="Henter bruker ..." />
       </Screen>
     );
   }
@@ -57,7 +70,7 @@ export default function UserDetailScreen() {
       {/* Dynamisk tittel: nå vet vi hvem det er. */}
       <Stack.Screen options={{ title: `${user.firstName} ${user.lastName}` }} />
 
-      <Card title="Fra API (TanStack Query)">
+      <Card title="Fra API (useEffect)">
         <UserInfo user={user} />
       </Card>
 

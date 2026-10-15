@@ -1,5 +1,7 @@
-import { Stack } from "expo-router";
+import { Stack, type SuspenseFallbackProps } from "expo-router";
 
+import { Loading } from "@/components/shared/Loading";
+import { Screen } from "@/components/shared/Screen";
 import { Theme } from "@/constants/theme";
 
 /**
@@ -21,6 +23,23 @@ import { Theme } from "@/constants/theme";
 export const unstable_settings = {
   initialRouteName: "index",
 };
+
+/**
+ * LASTER-SKJERM - en Expo Router-konvensjon (SDK 56+).
+ *
+ * Ruteren pakker HVER skjerm inn i sin egen <Suspense>. Eksporterer en
+ * layout SuspenseFallback, brukes den for alle skjermene i mappen mens de
+ * venter på et use(). Her: [id].tsx, mens den henter /todos/:id.
+ *
+ * params er URL-parameterne, så vi kan si HVA vi venter på.
+ */
+export function SuspenseFallback({ params }: SuspenseFallbackProps) {
+  return (
+    <Screen>
+      <Loading label={`Henter oppgave ${params.id ?? ""} ...`} />
+    </Screen>
+  );
+}
 
 export default function TasksStackLayout() {
   return (

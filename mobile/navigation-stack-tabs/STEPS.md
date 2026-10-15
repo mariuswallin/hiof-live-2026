@@ -263,11 +263,13 @@ toggling bare skje på detaljsiden.
 
 ---
 
-## Steg 5 – Detaljside og henting med `useEffect`
+## Steg 5 – Detaljside og henting med `use()` (React 19)
 
-**Mål:** Lese parametere fra URL-en, og hente data manuelt – med alt man må huske selv.
+**Mål:** Lese parametere fra URL-en, og hente data med `use()` – der laster og feil
+håndteres *utenfor* komponenten.
 
-**Filer:** `(tabs)/tasks/[id].tsx`, `src/api/dummy-json.ts`
+**Filer:** `(tabs)/tasks/[id].tsx`, `(tabs)/tasks/_layout.tsx`, `src/api/dummy-json.ts`,
+`src/api/cache.ts`
 
 **Vis – detaljsiden**
 
@@ -277,37 +279,32 @@ toggling bare skje på detaljsiden.
 4. Dynamisk tittel: `<Stack.Screen options={{ title: task.title }} />`.
 5. Slett → `remove(task.id)` + `router.back()`.
 
-**Vis – `RemoteTodo`**
+**Vis – henting med `use()`**
 
-1. To `useState`: `todo` og `error`. Laster = ingen av delene ennå.
-2. Effekten:
+1. Etter `if (!task) return …`:
 
 ```tsx
-useEffect(() => {
-  const controller = new AbortController();
-
-  fetchTodo(id, controller.signal)
-    .then(setTodo)
-    .catch((e) => {
-      if (controller.signal.aborted) return; // avbrudd er ikke en feil
-      setError(e instanceof Error ? e.message : "Ukjent feil");
-    });
-
-  return () => controller.abort(); // opprydding
-}, [id]);
+const todo = use(cached(todoKey(task.id), () => getTodo(task.id)));
 ```
 
-3. `key={task.id}` på `<RemoteTodo>` – ny id = ny komponent med tom state.
-4. `dummy-json.ts`: `response.ok`-sjekk og zod-validering i `getJson`.
-5. Bildet: URL bygget fra svaret, `expo-image`, `aspectRatio: 2` gir størrelse.
-6. `Link` videre med `userId` fra API-svaret (neste steg).
+2. `use()` etter en `if`/`return` – går ikke med vanlige hooks, men `use()` er unntaket.
+3. Ingen `useState`, ingen `isLoading`. Kommer koden forbi `use()`, *har* vi `todo`.
+4. Venter → Expo Router pakker hver skjerm i `<Suspense>`. Fallbacken kommer fra
+   `SuspenseFallback`-eksporten i `tasks/_layout.tsx` (SDK 56+), med `params.id`.
+5. Feiler → `ErrorBoundary`-eksporten nederst i `[id].tsx`. Headeren og tab-baren står.
+   «Prøv igjen» = `forget(todoKey(id))` + `retry()`.
+6. `api/cache.ts`: `use()` krever *samme* promise ved hver render – derfor `cached()`.
+7. `dummy-json.ts`: `getById("todos", id, TodoSchema)` – `response.ok`-sjekk og zod.
+8. Bildet: URL bygget fra svaret, `expo-image`, `aspectRatio: 2` gir størrelse.
+9. `Link` videre med `userId` fra API-svaret (neste steg).
 
 **Prøv**
 
 - Toggle en oppgave i «Lokalt» → «Fra API» endres ikke. API-et vet ikke om lokale endringer.
+- Gå tilbake og inn på samme oppgave → ingen «Henter oppgave …» (cache).
 - Fjern `aspectRatio` fra `styles.image` → bildet forsvinner.
-- Slå av nettet / skru på flymodus → feil-tilstand.
-- På web: legg en `console.log` i effekten og se at den kjører to ganger i dev.
+- Skru på flymodus og åpne en ny oppgave → `ErrorBoundary`. Skru av, «Prøv igjen».
+- Bytt `use(cached(...))` med `use(getTodo(task.id))` → evig lasting (nytt promise hver render).
 
 **Spørsmål**
 
@@ -318,22 +315,28 @@ Alt fra URL-en er tekst. Trenger du et tall: `Number(id)`, gjerne validert med z
 Local gir parametere for *denne* skjermen og oppdateres bare når den er i fokus. Global
 oppdateres ved hver URL-endring – også for skjermer i bakgrunnen. Nesten alltid: Local.
 
-**Hvorfor `useEffect` ett sted og TanStack Query et annet?**
-For å vise begge. `useEffect` viser hva som faktisk skjer (og hvor mye man må huske selv).
-TanStack Query viser hva man bruker i praksis.
+**Hvorfor tre måter å hente på (`use()`, `useEffect`, TanStack Query)?**
+For å vise alle. `useEffect` (`users/`, steg 9) viser hva som faktisk skjer – og hvor mye
+man må huske selv. `use()` + Suspense er React 19 sin måte. TanStack Query (steg 6) er det
+man ofte bruker i praksis.
 
-**Hva gjør `AbortController`?**
-Går brukeren tilbake før svaret kommer, avbrytes forespørselen. Uten den kan et gammelt
-svar komme inn og sette state på en skjerm som ikke finnes – eller overskrive nyere data
-hvis `id` har endret seg.
+**Hva skjer egentlig i `use()`?**
+Venter promiset, «suspenderer» komponenten: React avbryter renderingen og viser nærmeste
+`<Suspense fallback>`. Når svaret kommer, rendres komponenten på nytt – og da gir `use()`
+verdien. Feilet det, kastes feilen til nærmeste error boundary.
 
-**Hvorfor `key={task.id}` på `RemoteTodo`?**
-Ny `key` = React lager komponenten på nytt med tom state. Da slipper vi å nullstille
-`todo`/`error` manuelt inne i effekten (som lint-regelen advarer mot).
+**Hvorfor trenger vi `cached()`?**
+`use(getTodo(id))` rett i komponenten lager et nytt promise ved hver render. React venter,
+rendrer på nytt når svaret kommer – og får et *nytt* promise som må ventes på. Evig løkke.
+`cached()` gir samme promise for samme nøkkel.
 
-**Hvorfor kjører effekten to ganger i dev?**
-React Strict Mode kjører effekter to ganger i utvikling for å avsløre manglende
-opprydding. Med `AbortController` avbrytes den første – i produksjon skjer det én gang.
+**Hvorfor glemmer ikke `cached()` promiset selv når det feiler?**
+React rendrer komponenten på nytt for å *lese* feilen. Får den et nytt promise da, starter
+alt på nytt. Derfor glemmer vi det først når brukeren trykker «Prøv igjen» (`forget`).
+
+**Hvorfor forsvinner hele skjermen ved feil, ikke bare «Fra API»-kortet?**
+`ErrorBoundary`-eksporten gjelder hele ruten. En boundary rundt bare kortet må skrives som
+klassekomponent – React har ingen hook for det.
 
 **Hvorfor sjekker vi `response.ok`?**
 `fetch` kaster bare ved nettverksfeil. En 404 eller 500 er et «vellykket» svar, så vi må
@@ -368,11 +371,11 @@ Begge virker. `expo-image` cacher på disk, har `contentFit` (som `object-fit`) 
 ```tsx
 const { data: user, isPending, error } = useQuery({
   queryKey: ["user", userId],
-  queryFn: ({ signal }) => fetchUser(userId, signal),
+  queryFn: ({ signal }) => getUser(userId, signal),
 });
 ```
 
-3. Tabellen i kommentaren øverst:
+3. Tabellen i kommentaren øverst (sammenligner med `useEffect` i `users/[userId].tsx`):
 
 | `useEffect`                 | `useQuery`                               |
 | --------------------------- | ---------------------------------------- |
@@ -385,7 +388,7 @@ const { data: user, isPending, error } = useQuery({
 5. Dynamisk tittel med navnet.
 
 **Prøv:** Åpne eier-siden, gå tilbake, gå inn igjen → data vises med en gang.
-Sammenlign med detaljsiden, som viser «Henter …» hver gang.
+Sammenlign med `/users/68`, som viser «Henter bruker …» hver gang.
 
 **Spørsmål**
 
@@ -406,7 +409,7 @@ bakgrunnen om det er nytt.
 **Mål:** Skjermer som legges oppå tab-baren, og state som deles mellom skjermer.
 
 **Filer:** `src/app/new-task.tsx`, `src/app/settings.tsx`, `src/app/about.tsx`,
-`src/app/_layout.tsx`, `src/contexts/TasksContext.tsx`, `src/api/dummy-json.ts`,
+`src/app/_layout.tsx`, `src/contexts/TasksContext.tsx`, `src/api/dummy-json.ts`, `src/api/cache.ts`,
 `src/components/tasks/TaskRegister.tsx`
 
 **Vis**
@@ -427,15 +430,21 @@ bakgrunnen om det er nytt.
 5. «Avbryt»-knapp – gjør det samme som tilbake, men er tydelig i et skjema.
 6. `TasksContext.tsx`: `TasksProvider` + `useTasks()`, state løftet over navigatoren.
    `toggle`/`add`/`remove` lager alltid ny array.
-7. Henting i contexten: `useState([])` i stedet for `useState(TASKS)`, og `useEffect` med
-   tomt array som henter `dummyjson.com/todos?limit=8`. Gå gjennom steg 1–5 i kommentarene:
-   `fetch` → `response.ok` → `response.json()` (`unknown`) → `TodosResponseSchema.parse`
-   → `todos.map(toTask)` → `setTasks`. Pluss `isLoading`/`error`, `AbortController` og
-   opprydding.
-8. `toTask`: API-et sier `todo`/`completed`/tall-id, appen sier `title`/`done`/streng-id.
+7. Henting i contexten med `use()`:
+
+```tsx
+const initialTasks = use(cached(TASKS_KEY, loadTasks)); // listTodos() -> toTask
+const [tasks, setTasks] = useState(initialTasks);
+```
+
+   Ingen `isLoading`/`error` i contexten. Mens lista hentes, finnes ikke provideren ennå.
+8. `_layout.tsx`: `<Suspense fallback={… «Henter oppgaver …»}>` rundt `TasksProvider` –
+   *inni* `AuthProvider`, så bruker og oppgaver hentes samtidig. Feiler hentingen, viser
+   `ErrorBoundary`-eksporten «Noe gikk galt» + «Prøv igjen».
+9. `toTask`: API-et sier `todo`/`completed`/tall-id, appen sier `title`/`done`/streng-id.
    Oversett én gang – `TaskItem`, `TaskList` osv. trenger ikke endres.
-9. Skjermene må tåle at lista ikke er hentet ennå: `tasks/index.tsx` og `[id].tsx` viser
-   `Loading` mens `isLoading` er `true`.
+10. Skjermene sjekker aldri om lista er hentet: `tasks/index.tsx`, `[id].tsx`, Hjem og
+    badgen får alltid ferdig data.
 
 **Prøv**
 
@@ -449,7 +458,7 @@ bakgrunnen om det er nytt.
   tab-baren blir stående.
 - Åpne `https://dummyjson.com/todos?limit=8` i nettleseren – det er dette contexten får.
 - Refresh / lukk appen og åpne igjen → lista hentes på nytt, den nye oppgaven er borte.
-- Skru på flymodus og refresh → «Klarte ikke å hente oppgaver».
+- Skru på flymodus og refresh → «Noe gikk galt». Skru av, «Prøv igjen».
 
 **Spørsmål**
 
@@ -485,13 +494,17 @@ til API-et (POST/PATCH/DELETE) eller lagres lokalt (AsyncStorage/SQLite).
 Flere skjermer trenger lista (Hjem, Oppgaver, detaljsiden, badgen). Henter vi i én skjerm,
 har de andre ingenting før den skjermen er åpnet. I contexten hentes den én gang for alle.
 
-**Hvorfor kan ikke `useEffect` være `async`?**
-En effekt kan returnere en oppryddingsfunksjon – en `async`-funksjon returnerer alltid et
-Promise. Derfor lager vi `async function loadTasks()` inni og kaller den.
+**Hvorfor `useState(initialTasks)` – holder ikke `use()`?**
+`use()` gir lista fra API-et, og den endrer seg ikke. `toggle`/`add`/`remove` trenger state
+vi kan endre. Svaret fra API-et blir bare *startverdien*.
+
+**Hvorfor venter hele appen på oppgavene?**
+`TasksProvider` ligger over navigatoren – alle skjermene er «inni» den. Til gjengjeld
+slipper hver skjerm å sjekke om lista finnes.
 
 **Hvorfor feiler API-kallet for en oppgave jeg la til selv?**
 Nye oppgaver får `id` fra `Date.now()`, som ikke finnes i dummyjson → 404. Det er med
-vilje, så man ser feil-tilstanden.
+vilje, så man ser `ErrorBoundary`.
 
 **Hvorfor ser det forskjellig ut på iOS og Android?**
 Stack bruker native navigasjon, og hver plattform har sine egne animasjoner. Ikonene er
@@ -564,11 +577,29 @@ app/(tabs)/tasks/[id].tsx      app/users/[userId].tsx     <- dynamisk
    direkte.
 4. Rot-`_layout.tsx`: `initialRouteName: "(tabs)"` – samme triks ett nivå opp, så en
    dyplenke har Hjem under seg.
-5. `users/index.tsx`: `useQuery` + `FlatList`, hver rad en `UserItem` (samme oppbygning som
-   `TaskItem`). Lista hentes her, ikke i en context – bare denne skjermen trenger den.
+5. `users/index.tsx`: hentet på den **«gamle» måten** – `useState` + `useEffect` +
+   `AbortController`, med `listUsers()`. Laster = verken `users` eller `error` er satt.
+   `FlatList`, hver rad en `UserItem` (samme oppbygning som `TaskItem`). Lista hentes her,
+   ikke i en context – bare denne skjermen trenger den.
+
+```tsx
+useEffect(() => {
+  const controller = new AbortController();
+
+  listUsers(controller.signal)
+    .then(setUsers)
+    .catch((e) => {
+      if (controller.signal.aborted) return; // avbrudd er ikke en feil
+      setError(e instanceof Error ? e.message : "Ukjent feil");
+    });
+
+  return () => controller.abort(); // opprydding
+}, []);
+```
+
 6. `users/[userId].tsx`:
    - `useLocalSearchParams<{ userId: string }>()` – som `[id].tsx`.
-   - `queryKey: ["user", userId]` – **samme nøkkel** som `tasks/user/[userId].tsx`.
+   - Samme `useEffect`-mønster med `getUser(userId)`, og `[userId]` i dependency-arrayet.
    - `Number(userId) + 1` – parametere er strenger, så vi gjør om selv.
    - `<Link push href={{ pathname: "/users/[userId]", params: { userId: nextUserId } }}>` –
      samme fil, ny parameter, ny skjerm oppå.
@@ -580,8 +611,8 @@ app/(tabs)/tasks/[id].tsx      app/users/[userId].tsx     <- dynamisk
   involvert.
 - Trykk tilbake → lista (selv om du aldri åpnet den). Tilbake igjen → Hjem.
 - «Neste bruker» noen ganger, så tilbake → du går baklengs gjennom brukerne.
-- Hjem → «Åpne oppgave 3 direkte» → «Se hvem som eier den» (bruker 68). Så Hjem → «Åpne
-  bruker 68 direkte» → vises med en gang, uten «Henter …» (delt cache).
+- Lista → bruker → tilbake → samme bruker igjen: «Henter bruker …» hver gang (ingen
+  cache). Sammenlign med `/tasks/3`.
 - `/users/999` → API-et svarer 404 → feil-tilstand. `/users/abc` → 400, samme tilstand.
 - Kommenter ut `unstable_settings` i `users/_layout.tsx` og åpne `/users/68` → tilbake går
   rett til Hjem.
@@ -607,9 +638,18 @@ Lenken går til samme fil med en annen parameter. `push` sier eksplisitt «legg 
 oppå» – da går «tilbake» til forrige bruker. Med `replace` ville den byttet ut den
 nåværende.
 
-**Hvorfor vises `/users/68` med en gang etter at jeg har sett eieren av oppgave 3?**
-Begge skjermene bruker `queryKey: ["user", userId]`. Cachen bryr seg ikke om hvor i
-rutetreet skjermen ligger – samme nøkkel, samme data.
+**Hva gjør `AbortController`?**
+Går brukeren tilbake før svaret kommer, avbrytes forespørselen. Uten den kan et gammelt
+svar komme inn og sette state på en skjerm som ikke finnes – eller overskrive nyere data
+hvis `userId` har endret seg.
+
+**Hvorfor kjører effekten to ganger i dev?**
+React Strict Mode kjører effekter to ganger i utvikling for å avsløre manglende
+opprydding. Med `AbortController` avbrytes den første – i produksjon skjer det én gang.
+
+**Hvorfor `useEffect` her, når `tasks/` bruker `use()`?**
+For å se forskjellen. Her må skjermen selv holde styr på laster, feil og data, og avbryte.
+I `tasks/` gjør `use()`, `<Suspense>` og `ErrorBoundary` den jobben.
 
 **Når legger jeg en dynamisk rute i en tab, og når utenfor?**
 Hører den til én tab (en oppgave under Oppgaver), legg den i tabens Stack. Er den et eget
@@ -662,14 +702,15 @@ for å se `+not-found`. Fysisk telefon: bruk IP-en Metro viser i terminalen.
 nytt ved hver oppstart.
 
 **Filer:** `src/contexts/AuthContext.tsx`, `src/api/auth.ts`, `src/app/_layout.tsx`,
-`(tabs)/profile.tsx`, `(tabs)/index.tsx`
+`(tabs)/profile.tsx`, `(tabs)/index.tsx`, `src/hooks/useCurrentUser.ts`, `src/app/settings.tsx`,
+`src/contexts/AuthContextV2.tsx`
 
 **Vis**
 
 1. `api/auth.ts`: `fetchCurrentUser()` later som den er `GET /me` – venter 800 ms og
    returnerer en fast bruker (validert med zod). Logger `[auth] Henter innlogget bruker`.
-2. `AuthContext.tsx`: samme mønster som `TasksContext` – men `useState(null)` +
-   `useEffect(..., [])` som henter brukeren. Gå gjennom livsløpet i kommentaren øverst:
+2. `AuthContext.tsx`: samme Provider + hook som `TasksContext` – men henter på den
+   «gamle» måten (som `users/`): `useState(null)` + `useEffect(..., [])`. Gå gjennom livsløpet i kommentaren øverst:
    oppstart → `null` → hent → `setUser` → navigering (ingen ny henting) → refresh → start
    på nytt.
 3. `_layout.tsx`: `AuthProvider` ligger over navigatoren (og over `TasksProvider`), så
@@ -677,6 +718,12 @@ nytt ved hver oppstart.
 4. `_layout.tsx` → `RootNavigator`: mens `isLoading` er `true` vises bare «Henter bruker …».
    Appen vises først når vi vet hvem brukeren er (viktig for rollen i neste steg).
 5. `profile.tsx` og `index.tsx`: begge leser `useAuth()`, ingen henter selv.
+6. `hooks/useCurrentUser.ts`: samme `useState` + `useEffect` rundt `fetchCurrentUser()`,
+   men som **custom hook** i stedet for provider. Duplikat med vilje. `settings.tsx`
+   bruker den. Forskjellen: staten bor i skjermen, ikke over navigatoren.
+7. `contexts/AuthContextV2.tsx`: ny versjon av `AuthContext.tsx` (som står urørt). Samme
+   `AuthProvider` + `useAuth()`, men provideren kaller bare `useCurrentUser()` og deler
+   svaret. Hook = *hvordan* vi henter, context = *hvem* som får det.
 
 **Prøv**
 
@@ -684,6 +731,14 @@ nytt ved hver oppstart.
 - Bytt tab, åpne en oppgave, åpne «Ny oppgave»: ingen ny logglinje.
 - Refresh (F5 på web, «r» i Metro): brukeren er borte et øyeblikk, ny logglinje.
 - «Hent bruker på nytt» på Profil: samme flyt, uten å refreshe hele appen.
+- Profil → Innstillinger: «Henter bruker …» og ny logglinje. Tilbake og inn igjen: ny
+  henting igjen – custom hooken har ingen delt state.
+- Logg inn som admin på Profil → Innstillinger viser `admin` (ny henting). Men
+  `useAuth()` visste det allerede, uten å hente.
+- Bytt til V2: endre `"@/contexts/AuthContext"` til `"@/contexts/AuthContextV2"` i
+  `_layout.tsx`, `(tabs)/index.tsx`, `(tabs)/profile.tsx` og `admin.tsx`. Appen oppfører
+  seg likt. Glem én fil → `useAuth må brukes inne i <AuthProvider>` – to contexter kan
+  ikke blandes.
 
 **Spørsmål**
 
@@ -695,6 +750,13 @@ bare en kopi mens appen kjører.
 **Hvorfor `null` og ikke en tom bruker `{}`?**
 `null` sier tydelig «vet ikke ennå». Da tvinger TypeScript skjermene til å håndtere
 laster-tilstanden (`if (!user)`), i stedet for å vise tomme felter.
+
+**Custom hook eller context?**
+En custom hook gjenbruker *logikk*: hver komponent som kaller `useCurrentUser()` får sin
+egen `user` og sin egen henting. En context deler *state*: én henting, samme verdi overalt,
+og `loginAs` oppdaterer alle med en gang. Derfor leser `Stack.Protected` rollen fra
+`useAuth()`. Ofte kombinerer man dem: `useAuth()` *er* en custom hook – den leser bare fra
+context i stedet for å ha egen state.
 
 **Hva med utlogging og innloggingsskjerm?**
 Utlogging = slett token + `setUser(null)`. En innloggingsskjerm løses med samme verktøy som
@@ -772,7 +834,7 @@ ankerskjermen, her `/`.
 | `TasksContext` valgfritt (alt på én skjerm) | `TasksContext` nødvendig (skjermer får ikke props)     |
 | `TaskList` med `TaskRegister` inni, `.map`  | `TaskList` med `FlatList`, `TaskRegister` på egen skjerm |
 | `TaskLayout` tegner header                  | Navigatoren tegner header og tab-bar                  |
-| `useState(TASKS)` – lokal konstant          | `useState([])` + `useEffect` – lista hentes fra API    |
+| `useState(TASKS)` – lokal konstant          | `use()` + Suspense – lista hentes fra API              |
 | Ingen bruker                                | Innlogget bruker med rolle i `AuthContext`             |
 | Ingen tilgangsstyring                       | `/admin` beskyttet med `Stack.Protected`               |
 

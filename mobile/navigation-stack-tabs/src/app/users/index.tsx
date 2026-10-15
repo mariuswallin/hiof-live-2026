@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
-import { fetchUsers } from "@/api/dummy-json";
+import { listUsers, type User } from "@/api/dummy-json";
 import { Empty } from "@/components/shared/Empty";
 import { Loading } from "@/components/shared/Loading";
 import { Screen } from "@/components/shared/Screen";
@@ -11,31 +11,48 @@ import { Theme } from "@/constants/theme";
 /**
  * "/users" - lista over brukere, UTENFOR tabs.
  *
- * Samme oppsett som tasks/index.tsx: tre tilstander (laster -> feil -> data),
- * og en FlatList der hver rad er en <Link> til detaljsiden (UserItem).
+ * Hentet på den "GAMLE" måten: useState + useEffect. Vi må selv holde styr
+ * på tre tilstander - laster, feil, data. (Sammenlign med tasks/, som bruker
+ * use() + Suspense fra React 19.)
  *
- * Forskjellen: dataene ligger ikke i en context, men hentes med useQuery
- * her. Bare denne skjermen trenger lista, så det er ingen grunn til å dele
- * den - og TanStack Query cacher den uansett.
+ * Hver rad er en <Link> til detaljsiden (UserItem).
  */
 export default function UsersScreen() {
-  const { data: users, isPending, error } = useQuery({
-    queryKey: ["users"],
-    queryFn: ({ signal }) => fetchUsers(signal),
-  });
+  // null = ikke hentet ennå. Laster = verken users eller error er satt.
+  const [users, setUsers] = useState<User[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  if (isPending) {
-    return (
-      <Screen>
-        <Loading label="Henter brukere ..." />
-      </Screen>
-    );
-  }
+  // Kjører ÉN gang etter første render (tomt dependency-array).
+  useEffect(() => {
+    // AbortController: går brukeren tilbake før svaret kommer, avbryter vi
+    // forespørselen. Ellers kan et gammelt svar sette state på en skjerm
+    // som ikke lenger finnes.
+    const controller = new AbortController();
+
+    listUsers(controller.signal)
+      .then(setUsers)
+      .catch((e: unknown) => {
+        // Avbrudd er ikke en feil - det var vi som ba om det.
+        if (controller.signal.aborted) return;
+        setError(e instanceof Error ? e.message : "Ukjent feil");
+      });
+
+    // Opprydding: kjøres når skjermen forsvinner.
+    return () => controller.abort();
+  }, []);
 
   if (error) {
     return (
       <Screen>
-        <Empty title="Klarte ikke å hente brukere" hint={error.message} />
+        <Empty title="Klarte ikke å hente brukere" hint={error} />
+      </Screen>
+    );
+  }
+
+  if (!users) {
+    return (
+      <Screen>
+        <Loading label="Henter brukere ..." />
       </Screen>
     );
   }

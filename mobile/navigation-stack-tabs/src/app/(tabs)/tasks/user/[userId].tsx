@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
 
-import { fetchUser } from "@/api/dummy-json";
+import { getUser } from "@/api/dummy-json";
 import { Card } from "@/components/shared/Card";
 import { Empty } from "@/components/shared/Empty";
 import { Loading } from "@/components/shared/Loading";
@@ -13,8 +13,8 @@ import { UserInfo } from "@/components/users/UserInfo";
  *
  * userId kom fra API-svaret på detaljsiden og ble sendt hit via Link-params.
  *
- * Her henter vi med TanStack Query i stedet for useEffect. Sammenlign med
- * RemoteTodo i [id].tsx:
+ * Her henter vi med TanStack Query. Sammenlign med useEffect i
+ * users/[userId].tsx (samme bruker, samme getUser):
  *
  *   useEffect                        useQuery
  *   ---------                        --------
@@ -31,7 +31,7 @@ export default function UserScreen() {
     // queryKey = "navnet" på dataene i cachen. Alt queryFn avhenger av
     // (her userId) MÅ være med, ellers deler to brukere samme cache-plass.
     queryKey: ["user", userId],
-    queryFn: ({ signal }) => fetchUser(userId, signal),
+    queryFn: ({ signal }) => getUser(userId, signal),
   });
 
   if (isPending) {

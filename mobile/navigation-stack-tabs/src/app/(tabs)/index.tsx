@@ -14,7 +14,7 @@ import { useTasks } from "@/contexts/TasksContext";
  * Skjermen viser de ulike måtene å navigere på.
  */
 export default function HomeScreen() {
-  const { tasks, isLoading } = useTasks();
+  const { tasks } = useTasks();
   const doneCount = tasks.filter((task) => task.done).length;
   // Samme bruker som på Profil - begge leser fra AuthContext, ingen henter selv.
   const { user, isAdmin } = useAuth();
@@ -43,7 +43,7 @@ export default function HomeScreen() {
 
       <Card title="Status">
         <Text style={styles.big}>
-          {isLoading ? "…" : `${doneCount} av ${tasks.length}`}
+          {doneCount} av {tasks.length}
         </Text>
         <Text style={styles.muted}>oppgaver fullført</Text>
       </Card>
