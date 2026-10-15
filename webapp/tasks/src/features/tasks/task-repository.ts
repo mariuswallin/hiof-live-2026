@@ -7,9 +7,13 @@ import {
   type CreateTask,
   type Task,
   type UpdateTask,
+  type User,
 } from "@/db/schema";
 import type { TaksListParams } from "./utils/validate-list-params";
 import { eq } from "drizzle-orm";
+
+// En oppgave sammen med eieren sin (relasjonen tasks.user i relations.ts).
+export type TaskWithUser = Task & { user: User };
 
 export interface TaskRepository {
   create(data: CreateTask): Promise<
@@ -30,7 +34,7 @@ export interface TaskRepository {
     | {
         ok: true;
         // null = ingen oppgave med denne id-en
-        data: Task | null;
+        data: TaskWithUser | null;
       }
     | {
         ok: false;
@@ -41,10 +45,12 @@ export interface TaskRepository {
         };
       }
   >;
-  findMany(params: TaksListParams): Promise<
+  // userId er ikke en del av TaksListParams: den kommer fra innloggingen,
+  // aldri fra URL-en.
+  findMany(params: TaksListParams & { userId?: number }): Promise<
     | {
         ok: true;
-        data: Task[];
+        data: TaskWithUser[];
       }
     | {
         ok: false;
@@ -75,7 +81,7 @@ export interface TaskRepository {
     | {
         ok: true;
         // null = ingen oppgave med denne id-en
-        data: Task | null;
+        data: TaskWithUser | null;
       }
     | {
         ok: false;
@@ -90,13 +96,17 @@ export interface TaskRepository {
 
 export function createTaskRepository(_db: DB): TaskRepository {
   return {
-    async findMany({ completed, limit, q }) {
+    async findMany({ completed, limit, q, userId }) {
       try {
         const rows = await _db.query.tasks.findMany({
           where: {
             completed,
             title: q ? { like: `%${q}%` } : undefined,
+            // undefined = ikke filtrer på eier
+            userId,
           },
+          // Henter eieren i samme spørring.
+          with: { user: true },
           orderBy: { createdAt: "desc" },
           limit,
         });
@@ -144,11 +154,10 @@ export function createTaskRepository(_db: DB): TaskRepository {
     },
     async findById(id) {
       try {
-        const task = await _db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.id, id))
-          .get();
+        const task = await _db.query.tasks.findFirst({
+          where: { id },
+          with: { user: true },
+        });
 
         return {
           ok: true,
@@ -187,12 +196,14 @@ export function createTaskRepository(_db: DB): TaskRepository {
     },
     async update(id, data) {
       try {
-        const updatedTask = await _db
-          .update(tasks)
-          .set(data)
-          .where(eq(tasks.id, id))
-          .returning()
-          .get();
+        await _db.update(tasks).set(data).where(eq(tasks.id, id));
+
+        // Leser oppgaven på nytt sammen med eieren, som i findById. Fantes
+        // den ikke, ble ingenting endret, og vi får null.
+        const updatedTask = await _db.query.tasks.findFirst({
+          where: { id },
+          with: { user: true },
+        });
 
         return {
           ok: true,

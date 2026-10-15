@@ -1,4 +1,5 @@
 import { useState, useTransition } from "react";
+import { useAuth } from "@/features/auth/components/AuthProvider";
 import type { TaskDTO } from "../task-mapper";
 import { toggleTaskCompleted } from "../actions";
 
@@ -9,10 +10,11 @@ export function TaskItem({
   task: TaskDTO;
   onDelete: (id: string) => void;
 }) {
-  const { id, completed, dueDate, title } = task;
+  const { id, completed, dueDate, title, owner } = task;
 
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { isAdmin } = useAuth();
 
   const toggle = () => {
     setError(null);
@@ -50,16 +52,24 @@ export function TaskItem({
             </span>
           ) : null}
         </label>
+        {/* Admin ser oppgavene til alle, så vi viser hvem som eier den. */}
+        <span className="text-xs text-slate-500" data-testid="owner">
+          {owner}
+        </span>
         <span className="text-xs text-slate-400" data-testid="status">
           {isPending ? "lagrer…" : task.completed ? "ferdig" : "ikke ferdig"}
         </span>
-        <button
-          type="button"
-          onClick={remove}
-          className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
-        >
-          Slett
-        </button>
+        {/* Skjult for andre enn admin. Knappen er ikke vakten: ruta har
+            requireAdmin, og servicen sjekker rollen en gang til. */}
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={remove}
+            className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            Slett
+          </button>
+        )}
       </div>
       {error && (
         <p className="mt-2 text-sm text-red-600" data-testid="error">

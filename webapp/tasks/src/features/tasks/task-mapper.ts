@@ -6,9 +6,11 @@ export type TaskDTO = {
   completed: boolean;
   dueDate: Date | null;
   createdAt: string;
+  // Første del av e-posten til eieren: "kari" for kari@example.com.
+  owner: string;
 };
 
-export function toTaskDTO(task: Task): TaskDTO {
+export function toTaskDTO(task: Task, owner: { email: string }): TaskDTO {
   let { id, title, completed, dueDate, createdAt } = task;
 
   return {
@@ -17,5 +19,6 @@ export function toTaskDTO(task: Task): TaskDTO {
     completed,
     dueDate,
     createdAt: createdAt.toISOString(),
+    owner: owner.email.split("@")[0],
   };
 }

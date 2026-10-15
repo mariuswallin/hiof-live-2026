@@ -29,7 +29,8 @@ async function Tasks({ params }: { params: Params }) {
   const { ctx, request } = requestInfo;
   await demoDelay(request, 1000);
 
-  const result = await service.list(params);
+  // Servicen bestemmer hva du får se: dine egne, eller alle hvis du er admin.
+  const result = await service.list(params, ctx.user);
 
   if (!result.ok) {
     const details = Object.values(result.error.fieldErrors ?? {}).flat();

@@ -4,6 +4,7 @@
 // Stort sett kun ren typescript, validering, auth sjekk m.m
 
 import z from "zod";
+import { isAdmin, type SessionUser } from "@/features/auth/auth-types";
 import { toTaskDTO, type TaskDTO } from "./task-mapper";
 import { type TaskRepository, repository } from "./task-repository";
 import { createTaskSchema, updateTaskSchema } from "./task-schema";
@@ -12,7 +13,10 @@ import { validateListParams } from "./utils/validate-list-params";
 import { validateTask } from "./utils/validate-task";
 
 export interface TaskService {
-  create(input: unknown): Promise<
+  create(
+    input: unknown,
+    user: SessionUser | null,
+  ): Promise<
     | {
         ok: true;
         data: TaskDTO;
@@ -40,7 +44,10 @@ export interface TaskService {
         };
       }
   >;
-  list(params?: Params): Promise<
+  list(
+    params: Params,
+    user: SessionUser | null,
+  ): Promise<
     | {
         ok: true;
         data: TaskDTO[];
@@ -54,7 +61,10 @@ export interface TaskService {
         };
       }
   >;
-  remove(id: string): Promise<
+  remove(
+    id: string,
+    user: SessionUser | null,
+  ): Promise<
     | {
         ok: true;
       }
@@ -70,6 +80,7 @@ export interface TaskService {
   update(
     id: string,
     input: unknown,
+    user: SessionUser | null,
   ): Promise<
     | {
         ok: true;
@@ -90,7 +101,19 @@ export function createTaskService(_repository: TaskRepository): TaskService {
   const findTask = (id: string) => _repository.findById(id);
 
   return {
-    async list(params = {}) {
+    async list(params, user) {
+      // Lista er per bruker, så vi må vite hvem som spør.
+      if (!user) {
+        return {
+          ok: false,
+          error: {
+            code: "401",
+            message: "Du må være innlogget",
+            fieldErrors: {},
+          },
+        };
+      }
+
       const paramsValidationResult = validateListParams(params);
       if (!paramsValidationResult.ok) {
         return {
@@ -105,7 +128,12 @@ export function createTaskService(_repository: TaskRepository): TaskService {
         };
       }
 
-      const result = await _repository.findMany(paramsValidationResult.params);
+      // Admin ser oppgavene til alle. Andre ser bare sine egne. Hvem det
+      // er, kommer fra innloggingen (ctx.user), aldri fra URL-en.
+      const result = await _repository.findMany({
+        ...paramsValidationResult.params,
+        userId: isAdmin(user) ? undefined : user.id,
+      });
 
       if (!result.ok) {
         return result;
@@ -113,10 +141,23 @@ export function createTaskService(_repository: TaskRepository): TaskService {
 
       return {
         ok: true,
-        data: result.data.map(toTaskDTO),
+        data: result.data.map((task) => toTaskDTO(task, task.user)),
       };
     },
-    async create(input) {
+    async create(input, user) {
+      // Tilgang først. En server action går ikke gjennom requireUser på ruta,
+      // så servicen kan ikke stole på at noen andre har sjekket.
+      if (!user) {
+        return {
+          ok: false,
+          error: {
+            code: "401",
+            message: "Du må være innlogget",
+            fieldErrors: {},
+          },
+        };
+      }
+
       const parsed = createTaskSchema.safeParse(input);
       if (!parsed.success)
         return {
@@ -141,13 +182,17 @@ export function createTaskService(_repository: TaskRepository): TaskService {
         };
       }
 
-      const result = await _repository.create({ ...parsed.data, userId: 1 });
+      // Eieren er den som er innlogget, ikke noe klienten sender inn.
+      const result = await _repository.create({
+        ...parsed.data,
+        userId: user.id,
+      });
 
       if (!result.ok) return result;
 
       return {
         ok: true,
-        data: toTaskDTO(result.data),
+        data: toTaskDTO(result.data, user),
       };
     },
     async findById(id) {
@@ -168,10 +213,35 @@ export function createTaskService(_repository: TaskRepository): TaskService {
 
       return {
         ok: true,
-        data: toTaskDTO(result.data),
+        data: toTaskDTO(result.data, result.data.user),
       };
     },
-    async remove(id) {
+    async remove(id, user) {
+      // Tilgang FØR vi slår opp oppgaven. Ellers kan en uinnlogget bruker
+      // finne ut hvilke id-er som finnes (404 mot 401).
+      if (!user) {
+        return {
+          ok: false,
+          error: {
+            code: "401",
+            message: "Du må være innlogget",
+            fieldErrors: {},
+          },
+        };
+      }
+
+      // Innlogget, men ikke admin: 403. Samme regel som requireAdmin på ruta.
+      if (!isAdmin(user)) {
+        return {
+          ok: false,
+          error: {
+            code: "403",
+            message: `${user.email} er ikke admin`,
+            fieldErrors: {},
+          },
+        };
+      }
+
       const taskExist = await findTask(id);
 
       if (!taskExist.ok) return taskExist;
@@ -193,7 +263,23 @@ export function createTaskService(_repository: TaskRepository): TaskService {
         ok: true,
       };
     },
-    async update(id, input) {
+    async update(id, input, user) {
+      // Tilgang først: må være innlogget.
+      //
+      // TANKE: Enhver innlogget bruker kan endre ENHVER oppgave, hvis de
+      // kjenner id-en. Lista viser bare dine egne, men det er ikke en sperre.
+      // Hvordan ville du sjekket at oppgaven er din, eller at du er admin?
+      if (!user) {
+        return {
+          ok: false,
+          error: {
+            code: "401",
+            message: "Du må være innlogget",
+            fieldErrors: {},
+          },
+        };
+      }
+
       // 1. Alle felt er valgfrie (partial), så { completed: true }
       // holder. Zod fjerner felt den ikke kjenner, som id og userId.
       const parsed = updateTaskSchema.safeParse(input);
@@ -251,7 +337,7 @@ export function createTaskService(_repository: TaskRepository): TaskService {
 
       return {
         ok: true,
-        data: toTaskDTO(result.data),
+        data: toTaskDTO(result.data, result.data.user),
       };
     },
   };

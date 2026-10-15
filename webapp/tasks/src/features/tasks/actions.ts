@@ -38,10 +38,15 @@ export async function createTaskAction(
   const { ctx, request } = requestInfo;
   await demoDelay(request, 1200);
 
-  const result = await service.create({
-    title: values.title,
-    dueDate: values.dueDate || undefined,
-  });
+  // En server action går IKKE gjennom vaktene på rutene. Derfor sender vi
+  // brukeren til servicen, som sjekker selv.
+  const result = await service.create(
+    {
+      title: values.title,
+      dueDate: values.dueDate || undefined,
+    },
+    ctx.user,
+  );
 
   return result.ok
     ? {
@@ -63,7 +68,7 @@ export async function toggleTaskCompleted(id: string, completed: boolean) {
 
   if (chaos) return { ok: false as const, error: chaos.message };
 
-  const result = await service.update(id, { completed });
+  const result = await service.update(id, { completed }, ctx.user);
 
   return result.ok
     ? {

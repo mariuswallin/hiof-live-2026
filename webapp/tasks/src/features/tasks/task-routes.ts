@@ -2,30 +2,37 @@
 // på et sted. Har også aktuelle interruptors (mellomvare)
 
 import { route } from "rwsdk/router";
+import { requireAdmin, requireUser } from "@/features/auth/middleware";
 import { controller } from "./task-controller";
 
 export const taskRoutes = [
   route("/api/v1/tasks", {
-    get: controller.list,
+    get: [
+      requireUser,
+      controller.list,
+    ],
     post: [
-      // requireUser,
+      requireUser,
       controller.create,
     ],
   }),
   route("/api/v1/tasks/:id", {
-    get: controller.find,
+    get: [
+      requireUser,
+      controller.find,
+    ],
     patch: [
-      // requireUser,
+      requireUser,
       controller.update,
     ],
     delete: [
-      // requireAdmin,
+      requireAdmin,
       controller.remove,
     ],
   }),
   route("/api/v1/tasks/:id/:action", {
     post: [
-      // requireUser,
+      requireUser,
       controller.action,
     ],
   }),

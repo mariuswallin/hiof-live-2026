@@ -19,7 +19,7 @@ export function createTaskController(_service: TaskService): TaskController {
     async list({ request, ctx }: RequestInfo) {
       // ?completed=true
       const params = parseParams(request);
-      const result = await _service.list(params);
+      const result = await _service.list(params, ctx.user);
 
       if (!result.ok) {
         return Response.json(
@@ -62,9 +62,9 @@ export function createTaskController(_service: TaskService): TaskController {
         );
       }
 
-      const result = await _service.create(body);
+      const result = await _service.create(body, ctx.user);
 
-      // ok: true 201 (opprettet), ellers 400 eller 500 fra servicen.
+      // ok: true 201 (opprettet), ellers 400, 401 eller 500 fra servicen.
       return result.ok
         ? Response.json(result, {
             status: 201,
@@ -101,9 +101,9 @@ export function createTaskController(_service: TaskService): TaskController {
         );
       }
 
-      const result = await _service.remove(params.id);
+      const result = await _service.remove(params.id, ctx.user);
 
-      // ok: true 204 (ingen body), ellers 404 eller 500 fra servicen.
+      // ok: true 204 (ingen body), ellers 401, 403, 404 eller 500 fra servicen.
       return result.ok
         ? new Response(null, {
             status: 204,
@@ -113,7 +113,7 @@ export function createTaskController(_service: TaskService): TaskController {
           });
     },
     // PATCH /api/v1/tasks/:id med JSON, f.eks. { "completed": true }
-    async update({ request, params }: RequestInfo) {
+    async update({ request, params, ctx }: RequestInfo) {
       let body: unknown;
       try {
         body = await request.json();
@@ -131,11 +131,12 @@ export function createTaskController(_service: TaskService): TaskController {
         );
       }
 
-      const result = await _service.update(params.id, body);
+      const result = await _service.update(params.id, body, ctx.user);
 
       // Det servicen kan svare, og statusen vi sender:
       //   ok: true   200  den oppdaterte oppgaven
       //   "400"      400  feil form, ingen felt, eller brudd på reglene
+      //   "401"      401  ikke innlogget
       //   "404"      404  ingen oppgave med denne id-en
       //   "500"      500  noe gikk galt i databasen
       return result.ok
