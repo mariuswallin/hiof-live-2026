@@ -59,7 +59,10 @@ export function CreateTaskForm() {
   const isLoading = status === "loading";
 
   return (
-    <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-3">
+    <form
+      onSubmit={onSubmit}
+      className="mt-6 flex flex-col gap-3 max-w-lg mx-auto"
+    >
       <label className="flex flex-col gap-1">
         <span>Tittel</span>
         <input

@@ -10,6 +10,7 @@ import {
   taskRepository,
 } from "./features/tasks/task-repository";
 import { taskRoutes } from "./features/tasks/task-routes";
+import { TasksCreatePage } from "./features/tasks/pages/TaskCreatePage";
 
 /**
  * Alt som ligger på `ctx` for én forespørsel.
@@ -37,7 +38,7 @@ const app = defineApp([
   }),
 
   // Sider. render(Document, [...]) pakker dem i et helt HTML-dokument.
-  render(Document, [route("/", Home)]),
+  render(Document, [route("/", Home), route("/tasks", TasksCreatePage)]),
 ]);
 
 export default { fetch: app.fetch };
