@@ -48,12 +48,14 @@ export function createTaskRepository(_db: DB): TaskRepository {
         };
       }
     }, // implement thi,
-    list: () => {
+    list: async () => {
       // her skriver jeg ren sql
     },
-    get: (id) => {
+    get: async (id) => {
       // her bruker prisma
     },
+    update: async (id, task) => {},
+    remove: async (id) => {},
   };
 }
 

@@ -62,4 +62,4 @@ export function createTaskController(service: any): TaskController {
   };
 }
 
-export const taskController = createTaskController();
+export const taskController = createTaskController(taskService);
