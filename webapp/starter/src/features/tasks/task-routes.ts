@@ -3,6 +3,7 @@
 // Slik at worker.ts kan bli slankere
 
 import { route } from "rwsdk/router";
+import { taskController } from "./task-controller";
 
 export const taskRoutes = [
   route("/api/tasks", {
@@ -11,9 +12,7 @@ export const taskRoutes = [
     },
     post: [
       // requireUser,
-      () => {
-        // taskController.create
-      },
+      taskController.create,
     ],
   }),
   route("/api/tasks/:id", {

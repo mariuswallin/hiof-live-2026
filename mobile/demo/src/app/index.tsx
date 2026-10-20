@@ -2,6 +2,7 @@ import { Empty } from "@/components/shared/Empty";
 import { Loading } from "@/components/shared/Loading";
 import { TaskLayout } from "@/components/tasks/TaskLayout";
 import { TaskList } from "@/components/tasks/TaskList";
+import { useAuth } from "@/contexts/AuthContext";
 import { TasksProvider, useTasks } from "@/contexts/TasksContext";
 import { TASKS } from "@/data/tasks";
 import { useIndexHook } from "@/hooks/useIndexHook";
@@ -11,6 +12,7 @@ import { Text, View, StyleSheet, type Task } from "react-native";
 
 export default function Index() {
   // const { tasks: allMyTasks, toggle, add } = useIndexHook();
+  const { isAdmin } = useAuth();
 
   const { tasks, add, toggle: onToggle } = useTasks();
 
@@ -27,6 +29,7 @@ export default function Index() {
       <Link href="/about">Gå til about</Link>
       <Link href="/settings">Gå til settings</Link>
       <Link href="/students">Gå til studenter</Link>
+      {isAdmin ? <Link href="/admin">Gå til admin</Link> : null}
     </View>
   );
 }

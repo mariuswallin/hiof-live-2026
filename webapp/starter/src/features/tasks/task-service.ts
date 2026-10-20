@@ -52,7 +52,7 @@ export function createTaskService(_repository: TaskRepository): TaskService {
       // Her kaller vi repository.findMany()
       // Her returnerer vi resultatet av det vi fikk fra repository
     },
-    async create(data: unknown) {
+    async create(user, data) {
       const parsed = createTaskSchema.safeParse(data);
       if (!parsed.success) {
         return {
@@ -69,6 +69,8 @@ export function createTaskService(_repository: TaskRepository): TaskService {
       // if (!rule.ok) {
 
       // }
+
+      console.log(user.id);
 
       const result = await _repository.create({
         ...parsed.data,
