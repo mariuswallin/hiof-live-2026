@@ -1,4 +1,4 @@
-import { createContext, type ReactNode } from "react";
+import { createContext, use, type ReactNode } from "react";
 import { isAdmin, type SessionUser } from "../auth-types";
 
 type AuthContextValue = {
@@ -19,4 +19,12 @@ export function AuthProvider({ user, children }: AuthProviderProps) {
     isAdmin: isAdmin(user),
   };
   return <AuthContext value={value}>{children}</AuthContext>;
+}
+
+export function useAuth() {
+  const context = use(AuthContext);
+  if (!context) {
+    throw new Error("Invalid use of context. Must have AuthProvider");
+  }
+  return context;
 }
