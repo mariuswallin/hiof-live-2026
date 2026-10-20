@@ -16,3 +16,6 @@ minimumReleaseAgeExclude:
   - '@cloudflare/workers-types@5.20260907.1'
   - '@rolldown/plugin-babel@0.2.4'
   - lucide-react@1.42.0
+
+patchedDependencies:
+  rwsdk@1.7.3: patches/rwsdk@1.7.3.patch

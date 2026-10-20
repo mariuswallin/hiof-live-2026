@@ -1,0 +1,13 @@
+diff --git a/dist/lib/e2e/browser.mjs b/dist/lib/e2e/browser.mjs
+index ae0e347174730c5365eb4fb8e1479d6d239c6c2d..85139e6352954f3a1a3f5cae42a5c09b66bd3987 100644
+--- a/dist/lib/e2e/browser.mjs
++++ b/dist/lib/e2e/browser.mjs
+@@ -54,7 +54,7 @@ export async function checkServerUp(baseUrl, customPath = "/", retries = 30, inc
+                 try {
+                     log("Attempt %d/%d to check server at %s", i + 1, retries, candidateUrl);
+                     console.log(`Checking if server is up at ${candidateUrl} (attempt ${i + 1}/${retries})...`);
+-                    await $ `curl --max-time 1 -s -o /dev/null -w "%{http_code}" ${candidateUrl}`;
++                    await $ `curl --max-time 1 -s -o ${process.platform === "win32" ? "NUL" : "/dev/null"} -w "%{http_code}" ${candidateUrl}`;
+                     log("Server is up at %s", candidateUrl);
+                     console.log(`✅ Server is up at ${candidateUrl}`);
+                     return candidateUrl;
