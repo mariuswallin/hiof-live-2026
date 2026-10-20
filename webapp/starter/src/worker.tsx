@@ -11,6 +11,9 @@ import {
 } from "./features/tasks/task-repository";
 import { taskRoutes } from "./features/tasks/task-routes";
 import { TasksCreatePage } from "./features/tasks/pages/TaskCreatePage";
+import { TaskListPage } from "./features/tasks/components/TaskList";
+import { SessionUser } from "./features/auth/auth-types";
+import { setUser } from "./features/auth/middleware";
 
 /**
  * Alt som ligger på `ctx` for én forespørsel.
@@ -18,11 +21,14 @@ import { TasksCreatePage } from "./features/tasks/pages/TaskCreatePage";
  * Tom nå. Legger dere til `session` her, blir `ctx.session` typet i hele appen,
  * fordi types/rw.d.ts mater denne typen inn i rwsdk. Samme navn som i slidene.
  */
-export type AppContext = {};
+export type AppContext = {
+  user: SessionUser | null;
+};
 
 const app = defineApp([
   // Middleware. Kjører for hver forespørsel, i rekkefølgen de står.
   setCommonHeaders(),
+  setUser,
 
   // API-rute. Ligger UTENFOR render(), så svaret er akkurat det handleren
   // returnerer: JSON, uten HTML-skall rundt.
@@ -38,7 +44,11 @@ const app = defineApp([
   }),
 
   // Sider. render(Document, [...]) pakker dem i et helt HTML-dokument.
-  render(Document, [route("/", Home), route("/tasks", TasksCreatePage)]),
+  render(Document, [
+    route("/", Home),
+    route("/tasks", TasksCreatePage),
+    route("/task-list", TaskListPage),
+  ]),
 ]);
 
 export default { fetch: app.fetch };

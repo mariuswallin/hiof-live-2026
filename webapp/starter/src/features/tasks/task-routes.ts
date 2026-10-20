@@ -4,6 +4,7 @@
 
 import { route } from "rwsdk/router";
 import { taskController } from "./task-controller";
+import { requireAdmin, requireUser } from "../auth/middleware";
 
 export const taskRoutes = [
   route("/api/tasks", {
@@ -20,13 +21,13 @@ export const taskRoutes = [
       // taskController.get
     },
     put: [
-      // requireUser,
+      requireUser,
       () => {
         // taskController.update
       },
     ],
     delete: [
-      // requireAdmin,
+      requireAdmin,
       () => {
         // taskController.remove
       },

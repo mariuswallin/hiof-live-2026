@@ -1,0 +1,3 @@
+// Kobler opp ulike routes som skal kunne brukes.
+// Eks login, logout, register .....
+// Og metodene jeg skal kunne bruke til dette

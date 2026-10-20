@@ -7,6 +7,9 @@ export const users = sqliteTable("users", {
   id: int().primaryKey({ autoIncrement: true }),
   name: text().notNull(),
   email: text().notNull().unique(),
+  role: text({ enum: ["admin", "user"] })
+    .notNull()
+    .default("user"),
 });
 
 // Typen utledes FRA tabellen, så den kan aldri komme i utakt med skjemaet.
