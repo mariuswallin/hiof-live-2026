@@ -10,12 +10,12 @@ import { expect, test, type Page } from "@playwright/test";
 
 /** Tom oppgaveliste og tomme bilder - ingenting går ut på nettet. */
 async function mockApi(page: Page) {
-  await page.route("https://dummyjson.com/**", (route) => {
-    const path = new URL(route.request().url()).pathname;
-
-    if (path === "/todos") return route.fulfill({ json: { todos: [] } });
-    return route.fulfill({ status: 204 });
-  });
+  await page.route("http://localhost:5173/api/v1/tasks", (route) =>
+    route.fulfill({ json: { ok: true, data: [] } }),
+  );
+  await page.route("https://dummyjson.com/**", (route) =>
+    route.fulfill({ status: 204 }),
+  );
 }
 
 test("vanlig bruker ser ikke admin og sendes bort fra /admin", async ({

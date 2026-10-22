@@ -15,12 +15,12 @@ test("henter brukeren ved oppstart og refresh, ikke ved navigasjon", async ({
 }) => {
   // Oppgavelista (TasksContext) får en tom liste, avatar-bildet et tomt svar.
   // Da går ingenting ut på nettet.
-  await page.route("https://dummyjson.com/**", (route) => {
-    const path = new URL(route.request().url()).pathname;
-
-    if (path === "/todos") return route.fulfill({ json: { todos: [] } });
-    return route.fulfill({ status: 204 });
-  });
+  await page.route("http://localhost:5173/api/v1/tasks", (route) =>
+    route.fulfill({ json: { ok: true, data: [] } }),
+  );
+  await page.route("https://dummyjson.com/**", (route) =>
+    route.fulfill({ status: 204 }),
+  );
 
   let fetches = 0;
   page.on("console", (message) => {

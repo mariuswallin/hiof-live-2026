@@ -3,22 +3,26 @@ import { expect, test, type Page } from "@playwright/test";
 /**
  * E2E: en hel navigasjonsflyt, slik en bruker ville gjort det.
  *
- *   Hjem -> Oppgaver-taben -> detaljside (/tasks/3) -> eier (/tasks/user/68)
- *        -> tilbake -> tilbake til lista
+ *   Hjem -> Oppgaver-taben -> detaljside (/tasks/3) -> tilbake til lista
  *
- * API-et (dummyjson.com) MOCKES. Da er testen:
- * - rask og stabil (ikke avhengig av nettet eller at API-et er oppe)
+ * API-ene MOCKES - både webappen vår (oppgaver) og dummyjson.com (brukere).
+ * Da er testen:
+ * - rask og stabil (ikke avhengig av nettet eller at webappen kjører)
  * - forutsigbar (vi bestemmer selv hva API-et svarer)
  */
 
-/** Falske svar - samme form som dummyjson, så zod-valideringen går gjennom. */
+/** Falske svar - samme form som API-ene, så zod-valideringen går gjennom. */
 
-/** Lista TasksContext henter ved oppstart (GET /todos?limit=8). */
-const MOCK_TODOS = [
-  { id: 1, todo: "Lese om props", completed: true, userId: 1 },
-  { id: 3, todo: "Prøve FlatList", completed: false, userId: 68 },
+/** Adressen api/tasks.ts bruker. */
+const TASKS_API = "http://localhost:5173/api/v1";
+
+/** Lista TasksContext henter ved oppstart (GET /api/v1/tasks). */
+const MOCK_TASKS = [
+  { id: "1", title: "Lese om props", completed: true },
+  { id: "3", title: "Prøve FlatList", completed: false },
 ];
-const MOCK_TODO = { id: 3, todo: "Mocket todo fra testen", completed: false, userId: 68 };
+/** Detaljsiden henter én (GET /api/v1/tasks/3). */
+const MOCK_TASK = { id: "3", title: "Mocket oppgave fra testen", completed: false };
 const MOCK_USER = {
   id: 68,
   firstName: "Test",
@@ -39,11 +43,31 @@ const MOCK_NEXT_USER = {
  * på nettet. route.fulfill svarer i stedet for serveren.
  */
 async function mockApi(page: Page) {
+  // Webappen: { ok, data } rundt alt, som task-controller.ts svarer.
+  await page.route(`${TASKS_API}/**`, (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+
+    if (path === "/api/v1/tasks" && request.method() === "POST") {
+      // Svar som webappen: 201 + oppgaven, med en id SERVEREN har laget.
+      const body = request.postDataJSON();
+      return route.fulfill({
+        status: 201,
+        json: { ok: true, data: { id: "99", ...body } },
+      });
+    }
+    if (path === "/api/v1/tasks") {
+      return route.fulfill({ json: { ok: true, data: MOCK_TASKS } });
+    }
+    if (path === "/api/v1/tasks/3") {
+      return route.fulfill({ json: { ok: true, data: MOCK_TASK } });
+    }
+    return route.fulfill({ status: 404, json: { ok: false } });
+  });
+
   await page.route("https://dummyjson.com/**", (route) => {
     const path = new URL(route.request().url()).pathname;
 
-    if (path === "/todos") return route.fulfill({ json: { todos: MOCK_TODOS } });
-    if (path === "/todos/3") return route.fulfill({ json: MOCK_TODO });
     if (path === "/users/68") return route.fulfill({ json: MOCK_USER });
     if (path === "/users/69") return route.fulfill({ json: MOCK_NEXT_USER });
     // GET /users?limit=10&select=... - pathname er bare "/users".
@@ -56,7 +80,7 @@ async function mockApi(page: Page) {
   });
 }
 
-test("navigerer fra lista til detalj og videre til eier", async ({ page }) => {
+test("navigerer fra lista til detaljsiden og tilbake", async ({ page }) => {
   await mockApi(page);
 
   // 1. Start på Hjem ("/") og bytt til Oppgaver-taben.
@@ -69,19 +93,22 @@ test("navigerer fra lista til detalj og videre til eier", async ({ page }) => {
   await expect(page).toHaveURL(/\/tasks\/3$/);
 
   // 3. Detaljsiden viser MOCK-dataene (hentet med use() + Suspense).
-  await expect(page.getByText("«Mocket todo fra testen»")).toBeVisible();
+  await expect(page.getByText("«Mocket oppgave fra testen»")).toBeVisible();
 
-  // 4. Videre til eieren -> userId fra API-svaret havner i URL-en.
-  await page.getByText("Se hvem som eier den →").click();
-  await expect(page).toHaveURL(/\/tasks\/user\/68$/);
-  await expect(page.getByText("test@example.com")).toBeVisible();
-
-  // 5. Tilbake (samme som tilbake-knappen i headeren) - to ganger.
-  await page.goBack();
-  await expect(page).toHaveURL(/\/tasks\/3$/);
+  // 4. Tilbake (samme som tilbake-knappen i headeren).
   await page.goBack();
   await expect(page).toHaveURL(/\/tasks$/);
   await expect(page.getByText("Prøve FlatList")).toBeVisible();
+});
+
+test("eier-skjermen henter brukeren fra dummyjson", async ({ page }) => {
+  await mockApi(page);
+
+  // Ingen lenke hit fra detaljsiden ennå - webappen sender ikke userId.
+  // Men ruten virker: åpne den direkte, så henter getUser() bruker 68.
+  await page.goto("/tasks/user/68");
+  await expect(page.getByText("test@example.com")).toBeVisible();
+  await expect(page.getByText("userId: 68")).toBeVisible();
 });
 
 test("ny oppgave legges oppå tabs og går tilbake etter lagring", async ({
@@ -97,11 +124,52 @@ test("ny oppgave legges oppå tabs og går tilbake etter lagring", async ({
   // 2. Skjemaet ligger i rot-Stacken, UTENFOR tabs -> ingen tab-bar.
   await expect(page.getByRole("tab", { name: /Hjem/ })).toHaveCount(0);
 
-  // 3. Lagre -> router.back() -> tilbake på lista, med den nye oppgaven.
+  // 3. Lagre -> addApi() sender POST til webappen. Vi fanger forespørselen
+  //    for å se HVA appen sendte.
   await page.getByPlaceholder("Enter task name").fill("Lære Stack");
+  const postRequest = page.waitForRequest(
+    (request) =>
+      request.url() === `${TASKS_API}/tasks` && request.method() === "POST",
+  );
   await page.getByText("Register Task").click();
+  expect((await postRequest).postDataJSON()).toEqual({
+    title: "Lære Stack",
+    completed: false,
+  });
+
+  // 4. 201 -> router.back() -> tilbake på lista, med oppgaven fra svaret.
   await expect(page).toHaveURL(/\/tasks$/);
   await expect(page.getByText("Lære Stack")).toBeVisible();
+});
+
+test("ny oppgave blir stående med feilen når webappen svarer 400", async ({
+  page,
+}) => {
+  await mockApi(page);
+  // Registreres ETTER mockApi, og vinner derfor for POST: siste route først.
+  await page.route(`${TASKS_API}/tasks`, (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    return route.fulfill({
+      status: 400,
+      json: {
+        ok: false,
+        error: {
+          code: "400",
+          message: "Ikke gyldig data",
+          fieldErrors: { title: ["Tittel kan være maks 200 tegn"] },
+        },
+      },
+    });
+  });
+
+  // Appen sjekker bare "minst 3 tegn" - maks 200 er det webappen som passer på.
+  await page.goto("/new-task");
+  await page.getByPlaceholder("Enter task name").fill("x".repeat(201));
+  await page.getByText("Register Task").click();
+
+  // Ingen router.back(): vi står fortsatt på skjemaet, med serverens feil.
+  await expect(page.getByText("Tittel kan være maks 200 tegn")).toBeVisible();
+  await expect(page).toHaveURL(/\/new-task$/);
 });
 
 test("dynamisk rute utenfor tabs kan åpnes direkte", async ({ page }) => {
@@ -139,12 +207,17 @@ test("dynamisk rute utenfor tabs kan åpnes direkte", async ({ page }) => {
 test("viser feilmelding når API-et feiler", async ({ page }) => {
   // Lista går bra, men enkelt-oppgaven (use() i [id].tsx) svarer 500.
   // Feilen havner i ErrorBoundary-eksporten i [id].tsx.
-  await page.route("https://dummyjson.com/**", (route) => {
+  await page.route(`${TASKS_API}/**`, (route) => {
     const path = new URL(route.request().url()).pathname;
 
-    if (path === "/todos") return route.fulfill({ json: { todos: MOCK_TODOS } });
-    return route.fulfill({ status: 500 });
+    if (path === "/api/v1/tasks") {
+      return route.fulfill({ json: { ok: true, data: MOCK_TASKS } });
+    }
+    return route.fulfill({ status: 500, json: { ok: false } });
   });
+  await page.route("https://dummyjson.com/**", (route) =>
+    route.fulfill({ status: 204 }),
+  );
 
   await page.goto("/tasks/3");
 
@@ -152,21 +225,24 @@ test("viser feilmelding når API-et feiler", async ({ page }) => {
   // tekst rundt, så exact treffer bare meldingen i ErrorBoundary.
   await expect(page.getByText("Klarte ikke å hente")).toBeVisible();
   await expect(
-    page.getByText("Kunne ikke hente /todos/3 (500)", { exact: true }),
+    page.getByText("Kunne ikke hente oppgave 3 (500)", { exact: true }),
   ).toBeVisible();
 });
 
 test("viser feilmelding når lista ikke kan hentes", async ({ page }) => {
-  // Alt svarer 500 - også GET /todos i TasksContext. use() kaster, og
-  // feilen havner i ErrorBoundary-eksporten i rot-_layout.tsx.
+  // Webappen svarer 500 på GET /api/v1/tasks i TasksContext. use() kaster,
+  // og feilen havner i ErrorBoundary-eksporten i rot-_layout.tsx.
+  await page.route(`${TASKS_API}/**`, (route) =>
+    route.fulfill({ status: 500, json: { ok: false } }),
+  );
   await page.route("https://dummyjson.com/**", (route) =>
-    route.fulfill({ status: 500 }),
+    route.fulfill({ status: 204 }),
   );
 
   await page.goto("/tasks");
 
   await expect(page.getByText("Noe gikk galt")).toBeVisible();
   await expect(
-    page.getByText("Kunne ikke hente /todos?limit=8 (500)", { exact: true }),
+    page.getByText("Kunne ikke hente oppgaver (500)", { exact: true }),
   ).toBeVisible();
 });
