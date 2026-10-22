@@ -1,3 +1,5 @@
+"use client";
+
 import { createContext, use, type ReactNode } from "react";
 import { isAdmin, type SessionUser } from "../auth-types";
 

@@ -29,9 +29,9 @@ export async function TaskListPage() {
   );
 }
 
-// // FilterComponent.ts
+// // FilterComponent.tsx
 
-// ("use client");
+// "use client";
 
 // export function FilterComponent({ data }) {
 //   // noe state her

@@ -32,8 +32,10 @@ eldre. Alle versjoner er låst uten `^` og `~`, med vilje.
 
 ## Regler i dette prosjektet
 
-- `"use client"` bare der det faktisk er state eller hendelser, og alltid på
-  **linje 1**. En kommentar over gjør fila stille om til en server-modul.
+- `"use client"` bare der det faktisk er state eller hendelser, og alltid
+  **før alle imports**. En kommentar over går greit. En import over, eller
+  Prettiers `("use client");` med parentes, gjør fila stille om til en
+  server-modul.
 - Alt som kommer utenfra valideres med Zod og `safeParse`. Aldri `as` for å
   slippe unna en type.
 - `sql.raw` er forbudt. Bruk spørringsbyggeren, så bindes verdiene som

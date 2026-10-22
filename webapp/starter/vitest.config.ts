@@ -17,11 +17,19 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * because that reads more clearly.
  *
  * The `@/*` alias mirrors `paths` in tsconfig.
+ *
+ * `cloudflare:workers` only exists in workerd. The alias points it at a stub,
+ * so a component test whose imports reach `@/db` can still load. Tests that
+ * need a real database use better-sqlite3, not this stub.
  */
 export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "src"),
+      "cloudflare:workers": resolve(
+        __dirname,
+        "src/test/cloudflare-workers.ts",
+      ),
     },
   },
   test: {

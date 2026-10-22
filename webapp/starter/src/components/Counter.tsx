@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 
 /**
- * En klient-komponent. `"use client"` MÅ stå på linje 1, ikke etter en
- * kommentar eller en import.
+ * En klient-komponent. `"use client"` MÅ stå før alle imports. En kommentar
+ * over går greit, men ikke en import, og ikke `("use client");` med parentes,
+ * som Prettier av og til lager.
  *
  * Uten det direktivet kjører fila på serveren, og da finnes verken `useState`
  * eller `onClick`. Det er hele forskjellen på denne fila og Home.tsx.
