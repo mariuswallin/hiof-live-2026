@@ -20,13 +20,17 @@ import { NewTaskSchema } from "@/utils/task-schema";
  * Skjemaet er TaskRegister fra hiof-live-2026, uendret i bruk: den gir oss
  * tittelen via onRegister. Forskjellen fra før er HVA vi gjør etterpå:
  * i stedet for å bli stående, går vi tilbake med router.back().
+ *
+ * Oppgaven LAGRES i webappen med addApi() (POST /api/v1/tasks). Bytt til
+ * add() for å se forskjellen: da er den borte etter en refresh.
  */
 export default function NewTaskScreen() {
-  const { add } = useTasks();
+  const { addApi } = useTasks();
   const [error, setError] = useState("");
 
-  function handleRegisterTask(taskName: string) {
-    // Samme zod-regel som Task-skjemaet (minst 3 tegn, trimmet).
+  async function handleRegisterTask(taskName: string) {
+    // Samme zod-regel som Task-skjemaet (minst 3 tegn, trimmet). Sjekkes HER
+    // først, så vi slipper en tur til serveren for noe vi vet er feil.
     const result = NewTaskSchema.safeParse({ title: taskName });
 
     if (!result.success) {
@@ -34,10 +38,17 @@ export default function NewTaskScreen() {
       return;
     }
 
-    // result.data = { title, done: false } - samme form som add() i demoen.
-    add(result.data);
-    // Fjern skjemaet fra Stacken. Lista under er allerede oppdatert via context.
-    router.back();
+    try {
+      // result.data = { title, done: false }. await: vent til serveren har
+      // svart 201 - først da finnes oppgaven (med id fra serveren).
+      await addApi(result.data);
+      // Fjern skjemaet fra Stacken. Lista under er allerede oppdatert via context.
+      router.back();
+    } catch (error) {
+      // Webappen svarte 400, eller kjører ikke ("Network request failed").
+      // Vi blir stående, så brukeren ser feilen og kan prøve igjen.
+      setError(error instanceof Error ? error.message : "Kunne ikke lagre");
+    }
   }
 
   return (

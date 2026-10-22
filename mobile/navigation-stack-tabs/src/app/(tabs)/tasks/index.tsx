@@ -13,7 +13,7 @@ import { useTasks } from "@/contexts/TasksContext";
  * Nytt her: hver rad er en <Link> til detaljsiden (se TaskItem.tsx), og
  * "ny oppgave" er flyttet til en egen skjerm som åpnes med + i headeren.
  *
- * Lista er hentet fra API-et (listTodos) i TasksContext, med use() +
+ * Lista er hentet fra webappen (listTasks) i TasksContext, med use() +
  * Suspense. Derfor ingen laster- eller feil-tilstand HER: rendres skjermen,
  * er lista klar. (Sammenlign med users/index.tsx, som må sjekke selv.)
  */

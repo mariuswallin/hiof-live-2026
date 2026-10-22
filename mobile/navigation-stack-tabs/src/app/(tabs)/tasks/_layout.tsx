@@ -29,7 +29,7 @@ export const unstable_settings = {
  *
  * Ruteren pakker HVER skjerm inn i sin egen <Suspense>. Eksporterer en
  * layout SuspenseFallback, brukes den for alle skjermene i mappen mens de
- * venter på et use(). Her: [id].tsx, mens den henter /todos/:id.
+ * venter på et use(). Her: [id].tsx, mens den henter /api/v1/tasks/:id.
  *
  * params er URL-parameterne, så vi kan si HVA vi venter på.
  */

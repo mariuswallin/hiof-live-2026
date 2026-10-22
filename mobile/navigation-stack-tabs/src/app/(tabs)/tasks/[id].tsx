@@ -1,6 +1,5 @@
 import { Image } from "expo-image";
 import {
-  Link,
   Stack,
   router,
   useLocalSearchParams,
@@ -10,7 +9,7 @@ import { use } from "react";
 import { StyleSheet, Text } from "react-native";
 
 import { cached, forget } from "@/api/cache";
-import { getTodo } from "@/api/dummy-json";
+import { getTask } from "@/api/tasks";
 import { Button } from "@/components/shared/Button";
 import { Card } from "@/components/shared/Card";
 import { Empty } from "@/components/shared/Empty";
@@ -19,7 +18,7 @@ import { Theme } from "@/constants/theme";
 import { useTasks } from "@/contexts/TasksContext";
 
 /** Nøkkelen for én oppgave i cachen (api/cache.ts). */
-const todoKey = (id: string) => `todos/${id}`;
+const taskKey = (id: string) => `tasks/${id}`;
 
 /**
  * "/tasks/[id]" - DETALJSIDEN.
@@ -31,8 +30,8 @@ const todoKey = (id: string) => `todos/${id}`;
  * NB: parametere fra URL-en er ALLTID strenger. Skal du regne med dem,
  * må du gjøre dem om selv.
  *
- * Henter oppgaven fra API-et med React 19 sin use(), og lar Expo Router ta
- * seg av resten:
+ * Henter oppgaven fra webappen (GET /api/v1/tasks/:id) med React 19 sin
+ * use(), og lar Expo Router ta seg av resten:
  *   venter -> SuspenseFallback fra tasks/_layout.tsx
  *   feiler -> ErrorBoundary nederst i denne fila
  * Sammenlign med users/[userId].tsx: der gjør useEffect + useState den jobben.
@@ -71,10 +70,11 @@ export default function TaskDetailScreen() {
    * oppgave: svaret ligger klart, og ingen laster-skjerm vises.
    * (users/[userId].tsx har ingen cache - der hentes alt på nytt.)
    *
-   * Prøv: legg til en ny oppgave og åpne den. id-en (Date.now()) finnes ikke
-   * i API-et, så du får 404 - og ser ErrorBoundary.
+   * Prøv: bytt addApi med add i new-task.tsx, lag en oppgave og åpne den.
+   * id-en (Date.now()) finnes ikke i webappen, så du får 404 - og ser
+   * ErrorBoundary. Med addApi kom id-en FRA webappen, og den finnes.
    */
-  const todo = use(cached(todoKey(task.id), () => getTodo(task.id)));
+  const apiTask = use(cached(taskKey(task.id), () => getTask(task.id)));
 
   const handleDelete = () => {
     remove(task.id);
@@ -104,7 +104,7 @@ export default function TaskDetailScreen() {
         API-ets versjon av SAMME oppgave. Toggle over, og "Lokalt" endres,
         men ikke denne - API-et vet ingenting om lokale endringer.
 
-        Ingen laster- eller feil-sjekk: kommer vi hit, HAR vi todo.
+        Ingen laster- eller feil-sjekk: kommer vi hit, HAR vi apiTask.
       */}
       <Card title="Fra API (use + Suspense)">
         {/*
@@ -112,38 +112,24 @@ export default function TaskDetailScreen() {
           på web har et bilde i React Native INGEN størrelse av seg selv -
           uten width/height (eller aspectRatio) blir det 0x0 og usynlig.
 
-          Vi bygger URL-en fra data vi nettopp hentet (todo.id og tekst),
-          så bildet endres med id-en i navigasjonen.
+          Vi bygger URL-en fra data vi nettopp hentet (tittelen), så
+          bildet endres med oppgaven i navigasjonen.
 
           expo-image i stedet for Image fra react-native: cacher bildet på
           disk og har contentFit (som object-fit i CSS) og transition.
           Lokale bilder: source={require("@/assets/images/icon.png")}.
         */}
         <Image
-          source={`https://dummyjson.com/image/600x300/1565c0/ffffff?text=${encodeURIComponent(`#${todo.id} ${todo.todo}`)}`}
+          source={`https://dummyjson.com/image/600x300/1565c0/ffffff?text=${encodeURIComponent(apiTask.title)}`}
           style={styles.image}
           contentFit="cover"
           transition={200}
-          accessibilityLabel={todo.todo}
+          accessibilityLabel={apiTask.title}
         />
-        <Text style={styles.text}>«{todo.todo}»</Text>
+        <Text style={styles.text}>«{apiTask.title}»</Text>
         <Text style={styles.muted}>
-          {todo.completed ? "Fullført" : "Ikke fullført"} i API-et
+          {apiTask.completed ? "Fullført" : "Ikke fullført"} i API-et
         </Text>
-
-        {/*
-          Vi sender id-en VIDERE i navigasjonen. Neste skjerm legges oppå
-          denne i samme Stack - så "tilbake" kommer hit igjen.
-        */}
-        <Link
-          href={{
-            pathname: "/tasks/user/[userId]",
-            params: { userId: String(todo.userId) },
-          }}
-          style={styles.link}
-        >
-          Se hvem som eier den →
-        </Link>
       </Card>
     </Screen>
   );
@@ -169,7 +155,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         hint={error.message}
         actionLabel="Prøv igjen"
         onPress={() => {
-          forget(todoKey(id));
+          forget(taskKey(id));
           retry();
         }}
       />
@@ -191,11 +177,5 @@ const styles = StyleSheet.create({
     aspectRatio: 2, // bredde / høyde = 600 / 300
     borderRadius: Theme.radius.sm,
     backgroundColor: Theme.primaryLight,
-  },
-  link: {
-    marginTop: Theme.spacing.sm,
-    fontSize: Theme.fontSize.md,
-    fontWeight: "600",
-    color: Theme.primary,
   },
 });

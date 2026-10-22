@@ -55,7 +55,7 @@ export const unstable_settings = {
  * rutefil, så pakker ruteren den inn i en React error boundary.
  *
  * Kaster noe under her som ingen nærmere ErrorBoundary fanger, vises denne i
- * stedet for appen. Typisk: use() i TasksProvider når GET /todos feiler.
+ * stedet for appen. Typisk: use() i TasksProvider når GET /api/v1/tasks feiler.
  *
  * "Prøv igjen": glem promiset som feilet (se api/cache.ts), og la retry()
  * rendre layouten på nytt. Da starter use() en ny henting.
