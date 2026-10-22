@@ -2,6 +2,7 @@ import { Empty } from "@/components/shared/Empty";
 import { Loading } from "@/components/shared/Loading";
 import { TaskLayout } from "@/components/tasks/TaskLayout";
 import { TaskList } from "@/components/tasks/TaskList";
+import { Theme } from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { TasksProvider, useTasks } from "@/contexts/TasksContext";
 import { TASKS } from "@/data/tasks";
@@ -14,12 +15,38 @@ export default function Index() {
   // const { tasks: allMyTasks, toggle, add } = useIndexHook();
   const { isAdmin } = useAuth();
 
-  const { tasks, add, toggle: onToggle } = useTasks();
+  const { tasks, addApi, toggleApi, isLoading, error } = useTasks();
+  const [saveError, setSaveError] = useState("");
+
+  async function handleRegister(taskName: string) {
+    try {
+      await addApi({ title: taskName, done: false });
+      setSaveError("");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Kunne ikke lagre");
+    }
+  }
+
+  async function handleToggle(id: string) {
+    try {
+      await toggleApi(id);
+      setSaveError("");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Kunne ikke lagre");
+    }
+  }
 
   return (
     <View style={styles.container}>
       <TaskLayout>
-        <TaskList tasks={tasks} onRegister={add} onToggle={onToggle} />
+        {isLoading ? <Loading label="Henter oppgaver fra webappen ..." /> : null}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
+        <TaskList
+          tasks={tasks}
+          onRegister={handleRegister}
+          onToggle={handleToggle}
+        />
       </TaskLayout>
       <Text>Antall tasks: {tasks.length}</Text>
       {/* <Loading label={"Her laster vi ..."} />
@@ -39,6 +66,10 @@ const styles = StyleSheet.create({
     flex: 1,
     width: "100%",
     padding: 8,
+  },
+  error: {
+    color: Theme.danger,
+    paddingVertical: 4,
   },
 });
 

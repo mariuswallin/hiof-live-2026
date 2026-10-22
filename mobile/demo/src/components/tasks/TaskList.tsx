@@ -29,17 +29,10 @@ export function TaskList({ tasks, onRegister, onToggle }: TaskListProps) {
   //   // );
   // };
 
-  if (tasks.length === 0) {
-    return (
-      <View>
-        <Text>No tasks available</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <TaskRegister onRegister={onRegister} />
+      {tasks.length === 0 ? <Text>No tasks available</Text> : null}
       {tasks.map((task) => (
         <TaskItem key={task.id} task={task} onToggle={onToggle} />
       ))}

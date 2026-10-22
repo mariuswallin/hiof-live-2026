@@ -10,7 +10,7 @@ type TaskItemProps = {
 
 export function TaskItem({ task, onToggle }: TaskItemProps) {
   const { id, title, done } = task;
-  const { tasks, toggle } = useTasks();
+  const { tasks } = useTasks();
 
   return (
     <Pressable
@@ -19,7 +19,7 @@ export function TaskItem({ task, onToggle }: TaskItemProps) {
         task.done && styles.containerDone,
         pressed && styles.containerPressed,
       ]}
-      onPress={() => toggle(id)}
+      onPress={() => onToggle(id)}
     >
       <View style={[styles.checkbox, done && styles.checkboxDone]}>
         {done ? <Text style={styles.checkmark}>✓</Text> : null}

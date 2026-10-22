@@ -5,6 +5,10 @@ import { TasksProvider } from "@/contexts/TasksContext";
 import { Stack } from "expo-router";
 import { View } from "react-native";
 
+export const unstable_settings = {
+  anchor: "index",
+};
+
 function RootNavigator() {
   const { isLoading, isAdmin } = useAuth();
 
@@ -22,6 +26,7 @@ function RootNavigator() {
         headerTintColor: Theme.primary,
       }}
     >
+      <Stack.Screen name="index" />
       <Stack.Screen
         name="about"
         options={{
