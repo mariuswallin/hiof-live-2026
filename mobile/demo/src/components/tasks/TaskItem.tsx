@@ -6,27 +6,25 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 type TaskItemProps = {
   task: Task;
   onToggle: (id: string) => void;
+  onRemove: (id: string) => void;
 };
 
-export function TaskItem({ task, onToggle }: TaskItemProps) {
+export function TaskItem({ task, onToggle, onRemove }: TaskItemProps) {
   const { id, title, done } = task;
-  const { tasks } = useTasks();
 
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.container,
-        task.done && styles.containerDone,
-        pressed && styles.containerPressed,
-      ]}
-      onPress={() => onToggle(id)}
-    >
-      <View style={[styles.checkbox, done && styles.checkboxDone]}>
-        {done ? <Text style={styles.checkmark}>✓</Text> : null}
-      </View>
-      <Text>{tasks.length}</Text>
-      <Text style={[styles.title, done && styles.titleDone]}>{title}</Text>
-    </Pressable>
+    <View style={[styles.container, done && styles.containerDone]}>
+      <Pressable onPress={() => onToggle(id)}>
+        <View style={[styles.checkbox, done && styles.checkboxDone]}>
+          {done ? <Text style={styles.checkmark}>✓</Text> : null}
+        </View>
+        <Text style={[styles.title, done && styles.titleDone]}>{title}</Text>
+      </Pressable>
+      {/* <Text>{tasks.length}</Text> */}
+      <Pressable onPress={() => onRemove(id)} hitSlop={8}>
+        <Text style={styles.remove}>Slett</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -74,5 +72,11 @@ const styles = StyleSheet.create({
   titleDone: {
     color: Theme.muted,
     textDecorationLine: "line-through",
+  },
+  // STEG 1: Slett-knappen.
+  remove: {
+    color: Theme.danger,
+    fontSize: Theme.fontSize.sm,
+    fontWeight: "600",
   },
 });

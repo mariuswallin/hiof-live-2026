@@ -17,6 +17,7 @@ export interface TaskController {
 export function createTaskController(_service: TaskService): TaskController {
   return {
     async list({ request, ctx }: RequestInfo) {
+      await demoDelay(request, 1500);
       // ?completed=true
       const params = parseParams(request);
       const result = await _service.list(params);

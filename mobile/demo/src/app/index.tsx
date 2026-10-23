@@ -15,7 +15,7 @@ export default function Index() {
   // const { tasks: allMyTasks, toggle, add } = useIndexHook();
   const { isAdmin } = useAuth();
 
-  const { tasks, addApi, toggleApi, isLoading, error } = useTasks();
+  const { tasks, addApi, toggleApi, removeApi, isLoading, error } = useTasks();
   const [saveError, setSaveError] = useState("");
 
   async function handleRegister(taskName: string) {
@@ -36,15 +36,29 @@ export default function Index() {
     }
   }
 
+  async function handleRemove(id: string) {
+    try {
+      await removeApi(id);
+      setSaveError("");
+    } catch (error) {
+      setSaveError(
+        error instanceof Error ? error.message : "Kunne ikke slette",
+      );
+    }
+  }
+
   return (
     <View style={styles.container}>
       <TaskLayout>
-        {isLoading ? <Loading label="Henter oppgaver fra webappen ..." /> : null}
+        {isLoading ? (
+          <Loading label="Henter oppgaver fra webappen ..." />
+        ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
         <TaskList
           tasks={tasks}
           onRegister={handleRegister}
+          onRemove={handleRemove}
           onToggle={handleToggle}
         />
       </TaskLayout>

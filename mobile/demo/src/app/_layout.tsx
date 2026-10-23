@@ -27,6 +27,7 @@ function RootNavigator() {
       }}
     >
       <Stack.Screen name="index" />
+      <Stack.Screen name="new-task" options={{ title: "Ny oppgave" }} />
       <Stack.Screen
         name="about"
         options={{

@@ -8,9 +8,15 @@ type TaskListProps = {
   tasks: Task[];
   onRegister: (taskName: string) => void;
   onToggle: (id: string) => void;
+  onRemove: (id: string) => void;
 };
 
-export function TaskList({ tasks, onRegister, onToggle }: TaskListProps) {
+export function TaskList({
+  tasks,
+  onRegister,
+  onToggle,
+  onRemove,
+}: TaskListProps) {
   // const [query, setQuery] = useState(["na"]);
   // // const [filtered, setFiltered] = useState(tasks);
 
@@ -34,7 +40,12 @@ export function TaskList({ tasks, onRegister, onToggle }: TaskListProps) {
       <TaskRegister onRegister={onRegister} />
       {tasks.length === 0 ? <Text>No tasks available</Text> : null}
       {tasks.map((task) => (
-        <TaskItem key={task.id} task={task} onToggle={onToggle} />
+        <TaskItem
+          key={task.id}
+          task={task}
+          onToggle={onToggle}
+          onRemove={onRemove}
+        />
       ))}
     </View>
   );
