@@ -7,26 +7,45 @@ export async function LoginPage() {
   });
 
   return (
-    <main>
-      <h1>Logg inn</h1>
-      <p>Dette er en jukseloggin. Velg hvem du er, uten passord</p>
+    <main className="mx-auto max-w-md p-8 font-sans">
+      <h1 className="text-3xl font-bold">Logg inn</h1>
+      <p className="mt-2 text-slate-600">
+        Jukseinnlogging. Velg hvem du er, uten passord.
+      </p>
+
       {users.length === 0 ? (
-        <p>Ingen brukere i databasen. Prøv å seed med brukere</p>
-      ) : null}
-      <form method="post" action="/login">
-        <label>
-          Bruker
-          <select name="userId">
-            {users.map((user) => (
-              <option
-                key={user.id}
-                value={user.id}
-              >{`${user.name} (${user.role})`}</option>
-            ))}
-          </select>
-        </label>
-        <button type="submit">Logg inn</button>
-      </form>
+        <p className="mt-6 text-red-600" role="alert">
+          Ingen brukere i databasen. Kjør <code>npm run seed</code>.
+        </p>
+      ) : (
+        <form
+          method="post"
+          action="/login"
+          className="mt-6 flex flex-col gap-6"
+        >
+          <label className="flex flex-col gap-1 text-sm font-medium">
+            Bruker
+            {/* `name` er nøkkelen i skjemadataene, `value` er verdien. */}
+            <select
+              name="userId"
+              className="rounded-md border border-slate-300 px-3 py-2 font-normal"
+            >
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {`${user.name} (${user.role})`}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="submit"
+            className="self-start rounded-md bg-slate-900 px-4 py-2 text-white hover:bg-slate-700"
+          >
+            Logg inn
+          </button>
+        </form>
+      )}
     </main>
   );
 }
