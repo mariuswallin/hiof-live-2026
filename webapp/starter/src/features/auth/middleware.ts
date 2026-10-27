@@ -5,6 +5,7 @@
 import type { RouteMiddleware } from "rwsdk/router";
 import { isAdmin } from "./auth-types";
 import { db } from "@/db";
+import { readSessionUserId } from "./session";
 
 export const requireUser: RouteMiddleware = ({ ctx }) => {
   if (!ctx.user) {
@@ -51,8 +52,8 @@ export const requireAdmin: RouteMiddleware = ({ ctx }) => {
   }
 };
 
-export const setUser: RouteMiddleware = async ({ ctx }) => {
-  const userId = 1; // her skal vi parse cookie
+export const setUser: RouteMiddleware = async ({ ctx, request }) => {
+  const userId = readSessionUserId(request);
 
   if (!userId) {
     ctx.user = null;
@@ -70,4 +71,10 @@ export const setUser: RouteMiddleware = async ({ ctx }) => {
   });
 
   ctx.user = user ?? null;
+};
+
+export const requireUserPage: RouteMiddleware = ({ ctx }) => {
+  if (!ctx.user) {
+    return new Response(null, { status: 302, headers: { Location: "/login" } });
+  }
 };

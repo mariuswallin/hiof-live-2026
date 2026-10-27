@@ -35,5 +35,7 @@ export default defineConfig({
     // another one. Override with `--port`, which Playwright uses.
     port: 5173,
     strictPort: true,
+    // worker håndterer cords. true her gjør at dev ikke virker
+    cors: false,
   },
 });

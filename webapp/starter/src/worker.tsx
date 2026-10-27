@@ -1,19 +1,17 @@
 import { defineApp } from "rwsdk/worker";
-import { render, route } from "rwsdk/router";
+import { layout, render, route } from "rwsdk/router";
 import { Document } from "@/app/Document";
 import { setCommonHeaders } from "@/app/headers";
 import { Home } from "@/app/pages/Home";
-import { db } from "./db";
-import { tasks } from "./db/schema";
-import {
-  createTaskRepository,
-  taskRepository,
-} from "./features/tasks/task-repository";
+
+import { taskRepository } from "./features/tasks/task-repository";
 import { taskRoutes } from "./features/tasks/task-routes";
 import { TasksCreatePage } from "./features/tasks/pages/TaskCreatePage";
-import { TaskListPage } from "./features/tasks/components/TaskList";
+import { TaskListPage } from "./features/tasks/pages/TaskListPage";
 import type { SessionUser } from "./features/auth/auth-types";
-import { setUser } from "./features/auth/middleware";
+import { requireUserPage, setUser } from "./features/auth/middleware";
+import { authRoutes } from "./features/auth/auth-routes";
+import { AppLayout } from "./components/Layout";
 
 /**
  * Alt som ligger på `ctx` for én forespørsel.
@@ -35,7 +33,6 @@ const app = defineApp([
   ...taskRoutes,
   route("/api/status", () => Response.json({ status: "ok", version: "0.1.0" })),
   route("/api/tasks", async (params) => {
-    const headers = Object.fromEntries(params.request.headers.entries());
     const allTasks = await taskRepository.list();
     return Response.json({
       ok: true,
@@ -45,9 +42,12 @@ const app = defineApp([
 
   // Sider. render(Document, [...]) pakker dem i et helt HTML-dokument.
   render(Document, [
-    route("/", Home),
-    route("/tasks", TasksCreatePage),
-    route("/task-list", TaskListPage),
+    layout(AppLayout, [
+      route("/", Home),
+      route("/tasks", TasksCreatePage),
+      route("/task-list", [requireUserPage, TaskListPage]),
+      ...authRoutes,
+    ]),
   ]),
 ]);
 
