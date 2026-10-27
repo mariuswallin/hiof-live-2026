@@ -33,9 +33,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   function logout() {
-    // USIKKERT: appen glemmer tokenet, men serveren kan ikke gjøre det ugyldig,
-    // siden det bare er id-en. Alternativ: sesjoner i en tabell på serveren,
-    // som slettes ved utlogging.
+    // USIKKERT: appen glemmer tokenet, men serveren kan ikke gjøre det ugyldig
     setToken(null);
     setUser(null);
   }

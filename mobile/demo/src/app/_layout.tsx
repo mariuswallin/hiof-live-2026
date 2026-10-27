@@ -10,9 +10,7 @@ export const unstable_settings = {
 function RootNavigator() {
   const { user, isAdmin } = useAuth();
 
-  // Samme idé som requireUserPage i webappen: uten bruker finnes bare login.
   // Når user settes eller fjernes, bytter Stack.Protected skjerm selv.
-
   const validUser = user !== null && user !== undefined;
 
   return (
