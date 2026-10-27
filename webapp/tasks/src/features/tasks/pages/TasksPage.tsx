@@ -29,7 +29,7 @@ async function Tasks({ params }: { params: Params }) {
   const { ctx, request } = requestInfo;
   await demoDelay(request, 1000);
 
-  const result = await service.list(params);
+  const result = await service.list(ctx.user, params);
 
   if (!result.ok) {
     const details = Object.values(result.error.fieldErrors ?? {}).flat();

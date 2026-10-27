@@ -41,7 +41,8 @@ export interface TaskRepository {
         };
       }
   >;
-  findMany(params: TaksListParams): Promise<
+  // userId: bare oppgavene til denne brukeren. undefined gir alle.
+  findMany(params: TaksListParams & { userId?: number }): Promise<
     | {
         ok: true;
         data: Task[];
@@ -90,10 +91,11 @@ export interface TaskRepository {
 
 export function createTaskRepository(_db: DB): TaskRepository {
   return {
-    async findMany({ completed, limit, q }) {
+    async findMany({ completed, limit, q, userId }) {
       try {
         const rows = await _db.query.tasks.findMany({
           where: {
+            userId,
             completed,
             title: q ? { like: `%${q}%` } : undefined,
           },

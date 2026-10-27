@@ -38,7 +38,7 @@ export async function createTaskAction(
   const { ctx, request } = requestInfo;
   await demoDelay(request, 1200);
 
-  const result = await service.create({
+  const result = await service.create(ctx.user, {
     title: values.title,
     dueDate: values.dueDate || undefined,
   });
@@ -55,6 +55,8 @@ export async function createTaskAction(
       };
 }
 
+// En server action går utenom vaktene på API-rutene (requireUser). Derfor
+// sender vi ctx.user til servicen, som sjekker innlogging og eier selv.
 export async function toggleTaskCompleted(id: string, completed: boolean) {
   const { ctx, request } = requestInfo;
 
@@ -63,7 +65,7 @@ export async function toggleTaskCompleted(id: string, completed: boolean) {
 
   if (chaos) return { ok: false as const, error: chaos.message };
 
-  const result = await service.update(id, { completed });
+  const result = await service.update(ctx.user, id, { completed });
 
   return result.ok
     ? {

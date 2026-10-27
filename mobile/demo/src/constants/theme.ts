@@ -20,6 +20,7 @@ export const Theme = {
   surface: "#ffffff",
   text: "#111827",
   textInverted: "#ffffff",
+  textDark: "#000000",
 
   // Avstander. Faste trinn gir jevn rytme i UI-et.
   spacing: {

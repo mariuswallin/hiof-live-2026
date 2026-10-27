@@ -13,12 +13,6 @@ import { requireUserPage, setUser } from "./features/auth/middleware";
 import { authRoutes } from "./features/auth/auth-routes";
 import { AppLayout } from "./components/Layout";
 
-/**
- * Alt som ligger på `ctx` for én forespørsel.
- *
- * Tom nå. Legger dere til `session` her, blir `ctx.session` typet i hele appen,
- * fordi types/rw.d.ts mater denne typen inn i rwsdk. Samme navn som i slidene.
- */
 export type AppContext = {
   user: SessionUser | null;
 };

@@ -1,18 +1,17 @@
-import { createContext, use, useEffect, useState, type ReactNode } from "react";
+import { login as loginApi, type ApiUser } from "@/api/auth";
+import { createContext, use, useState, type ReactNode } from "react";
 
-export type Role = "admin" | "user";
+export type Role = ApiUser["role"];
 
-export type User = {
-  id: string;
-  name: string;
-  role: Role;
-};
+export type User = ApiUser;
 
 type AuthContextData = {
   user: User | null;
+  token: string | null;
   role?: Role;
   isAdmin: boolean;
-  isLoading: boolean;
+  login: (userId: number) => Promise<void>;
+  logout: () => void;
 };
 
 const AuthContext = createContext<null | AuthContextData>(null);
@@ -23,26 +22,33 @@ type AuthProviderProps = {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
+  // Bare i minnet, så du må logge inn igjen når appen starter på nytt.
+  // Skal det huskes: expo-secure-store, ikke AsyncStorage (som er ukryptert).
+  const [token, setToken] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Her ville jeg kalt et api for å hente en bruker fra f.eks AppWrite
-    // Eller trigge en login sekvens
-    // Dette tar 500ms
-    setUser({
-      id: "1",
-      name: "Lara Croft",
-      role: "admin",
-    });
-  }, []);
+  async function login(userId: number) {
+    const result = await loginApi(userId);
+    setToken(result.token);
+    setUser(result.user);
+  }
+
+  function logout() {
+    // USIKKERT: appen glemmer tokenet, men serveren kan ikke gjøre det ugyldig,
+    // siden det bare er id-en. Alternativ: sesjoner i en tabell på serveren,
+    // som slettes ved utlogging.
+    setToken(null);
+    setUser(null);
+  }
 
   const isAdmin = user?.role === "admin";
-  const isLoading = user === null;
 
   const value = {
     user,
+    token,
     role: user?.role,
     isAdmin,
-    isLoading,
+    login,
+    logout,
   };
 
   return <AuthContext value={value}>{children}</AuthContext>;

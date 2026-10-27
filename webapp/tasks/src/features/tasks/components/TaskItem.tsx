@@ -1,6 +1,7 @@
 import { useState, useTransition } from "react";
 import type { TaskDTO } from "../task-mapper";
 import { toggleTaskCompleted } from "../actions";
+import { useAuth } from "@/features/auth/components/AuthProvider";
 
 export function TaskItem({
   task,
@@ -10,6 +11,7 @@ export function TaskItem({
   onDelete: (id: string) => void;
 }) {
   const { id, completed, dueDate, title } = task;
+  const { isAdmin } = useAuth();
 
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -53,13 +55,17 @@ export function TaskItem({
         <span className="text-xs text-slate-400" data-testid="status">
           {isPending ? "lagrer…" : task.completed ? "ferdig" : "ikke ferdig"}
         </span>
-        <button
-          type="button"
-          onClick={remove}
-          className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
-        >
-          Slett
-        </button>
+        {/* Å skjule knappen er for brukeren, ikke sikkerhet. Det er
+            requireAdmin på DELETE-ruta som faktisk stopper en vanlig bruker. */}
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={remove}
+            className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            Slett
+          </button>
+        )}
       </div>
       {error && (
         <p className="mt-2 text-sm text-red-600" data-testid="error">

@@ -9,11 +9,11 @@ import { TASKS } from "@/data/tasks";
 import { useIndexHook } from "@/hooks/useIndexHook";
 import { Link } from "expo-router";
 import { use, useEffect, useState } from "react";
-import { Text, View, StyleSheet, type Task } from "react-native";
+import { Text, View, StyleSheet, Pressable, type Task } from "react-native";
 
 export default function Index() {
   // const { tasks: allMyTasks, toggle, add } = useIndexHook();
-  const { isAdmin } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
 
   const { tasks, addApi, toggleApi, removeApi, isLoading, error } = useTasks();
   const [saveError, setSaveError] = useState("");
@@ -49,6 +49,12 @@ export default function Index() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.userRow}>
+        <Text>{user ? `${user.name} (${user.role})` : null}</Text>
+        <Pressable onPress={logout} hitSlop={8}>
+          <Text style={styles.logout}>Logg ut</Text>
+        </Pressable>
+      </View>
       <TaskLayout>
         {isLoading ? (
           <Loading label="Henter oppgaver fra webappen ..." />
@@ -84,6 +90,15 @@ const styles = StyleSheet.create({
   error: {
     color: Theme.danger,
     paddingVertical: 4,
+  },
+  userRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+  },
+  logout: {
+    color: Theme.primary,
+    fontWeight: "600",
   },
 });
 

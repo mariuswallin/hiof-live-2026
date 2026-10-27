@@ -1,5 +1,5 @@
 import { Theme } from "@/constants/theme";
-import { useTasks } from "@/contexts/TasksContext";
+
 import type { Task } from "@/utils/task-schema";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 
@@ -14,7 +14,7 @@ export function TaskItem({ task, onToggle, onRemove }: TaskItemProps) {
 
   return (
     <View style={[styles.container, done && styles.containerDone]}>
-      <Pressable onPress={() => onToggle(id)}>
+      <Pressable onPress={() => onToggle(id)} style={styles.toggle}>
         <View style={[styles.checkbox, done && styles.checkboxDone]}>
           {done ? <Text style={styles.checkmark}>✓</Text> : null}
         </View>
@@ -46,6 +46,13 @@ const styles = StyleSheet.create({
   containerPressed: {
     opacity: 0.6,
   },
+  // Checkbox + tittel på rad, og flex: 1 skyver Slett helt til høyre.
+  toggle: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Theme.spacing.md,
+  },
   checkbox: {
     width: 24,
     height: 24,
@@ -67,7 +74,7 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     fontSize: Theme.fontSize.md,
-    color: Theme.text,
+    color: Theme.textDark,
   },
   titleDone: {
     color: Theme.muted,

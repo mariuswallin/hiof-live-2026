@@ -4,6 +4,11 @@ export const users = sqliteTable("users", {
   id: int().primaryKey({ autoIncrement: true }),
   name: text().notNull(),
   email: text().notNull().unique(),
+  // Rollen bor i databasen, ikke i cookien. Da er det serveren som bestemmer
+  // hvem som er admin.
+  role: text({ enum: ["admin", "user"] })
+    .notNull()
+    .default("user"),
 });
 
 export type User = typeof users.$inferSelect;

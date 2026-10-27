@@ -1,24 +1,19 @@
-import { Loading } from "@/components/shared/Loading";
 import { Theme } from "@/constants/theme";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { TasksProvider } from "@/contexts/TasksContext";
 import { Stack } from "expo-router";
-import { View } from "react-native";
 
 export const unstable_settings = {
   anchor: "index",
 };
 
 function RootNavigator() {
-  const { isLoading, isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
 
-  if (isLoading) {
-    return (
-      <View>
-        <Loading />
-      </View>
-    );
-  }
+  // Samme idé som requireUserPage i webappen: uten bruker finnes bare login.
+  // Når user settes eller fjernes, bytter Stack.Protected skjerm selv.
+
+  const validUser = user !== null && user !== undefined;
 
   return (
     <Stack
@@ -26,28 +21,34 @@ function RootNavigator() {
         headerTintColor: Theme.primary,
       }}
     >
-      <Stack.Screen name="index" />
-      <Stack.Screen name="new-task" options={{ title: "Ny oppgave" }} />
-      <Stack.Screen
-        name="about"
-        options={{
-          title: "Om oss",
-        }}
-      />
-      <Stack.Screen
-        name="settings"
-        options={{
-          title: "Settings",
-        }}
-      />
-      <Stack.Screen
-        name="students"
-        options={{
-          headerShown: false,
-        }}
-      />
-      <Stack.Protected guard={isAdmin}>
-        <Stack.Screen name="admin" options={{ title: "Admin" }} />
+      <Stack.Protected guard={!validUser}>
+        <Stack.Screen name="login" options={{ title: "Logg inn" }} />
+      </Stack.Protected>
+
+      <Stack.Protected guard={validUser}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="new-task" options={{ title: "Ny oppgave" }} />
+        <Stack.Screen
+          name="about"
+          options={{
+            title: "Om oss",
+          }}
+        />
+        <Stack.Screen
+          name="settings"
+          options={{
+            title: "Settings",
+          }}
+        />
+        <Stack.Screen
+          name="students"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Protected guard={isAdmin}>
+          <Stack.Screen name="admin" options={{ title: "Admin" }} />
+        </Stack.Protected>
       </Stack.Protected>
     </Stack>
   );

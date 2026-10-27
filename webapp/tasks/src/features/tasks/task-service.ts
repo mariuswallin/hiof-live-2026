@@ -10,9 +10,14 @@ import { createTaskSchema, updateTaskSchema } from "./task-schema";
 import type { Params } from "./utils/parse-params";
 import { validateListParams } from "./utils/validate-list-params";
 import { validateTask } from "./utils/validate-task";
+import { isAdmin, type SessionUser } from "../auth/auth-types";
+import type { Task } from "@/db/schema";
 
 export interface TaskService {
-  create(input: unknown): Promise<
+  create(
+    user: SessionUser | null,
+    input: unknown,
+  ): Promise<
     | {
         ok: true;
         data: TaskDTO;
@@ -26,7 +31,10 @@ export interface TaskService {
         };
       }
   >;
-  findById(id: string): Promise<
+  findById(
+    user: SessionUser | null,
+    id: string,
+  ): Promise<
     | {
         ok: true;
         data: TaskDTO;
@@ -40,7 +48,10 @@ export interface TaskService {
         };
       }
   >;
-  list(params?: Params): Promise<
+  list(
+    user: SessionUser | null,
+    params?: Params,
+  ): Promise<
     | {
         ok: true;
         data: TaskDTO[];
@@ -68,6 +79,7 @@ export interface TaskService {
       }
   >;
   update(
+    user: SessionUser | null,
     id: string,
     input: unknown,
   ): Promise<
@@ -89,8 +101,23 @@ export interface TaskService {
 export function createTaskService(_repository: TaskRepository): TaskService {
   const findTask = (id: string) => _repository.findById(id);
 
+  // Eieren eller en admin. Samme regel for å lese og for å endre én oppgave.
+  const canAccess = (user: SessionUser, task: Task) =>
+    task.userId === user.id || isAdmin(user);
+
   return {
-    async list(params = {}) {
+    async list(user, params = {}) {
+      if (!user) {
+        return {
+          ok: false,
+          error: {
+            code: "401",
+            message: "Du må være innlogget",
+            fieldErrors: {},
+          },
+        };
+      }
+
       const paramsValidationResult = validateListParams(params);
       if (!paramsValidationResult.ok) {
         return {
@@ -105,7 +132,11 @@ export function createTaskService(_repository: TaskRepository): TaskService {
         };
       }
 
-      const result = await _repository.findMany(paramsValidationResult.params);
+      // Admin ser alle oppgavene, andre bare sine egne.
+      const result = await _repository.findMany({
+        ...paramsValidationResult.params,
+        userId: isAdmin(user) ? undefined : user.id,
+      });
 
       if (!result.ok) {
         return result;
@@ -116,7 +147,18 @@ export function createTaskService(_repository: TaskRepository): TaskService {
         data: result.data.map(toTaskDTO),
       };
     },
-    async create(input) {
+    async create(user, input) {
+      if (!user) {
+        return {
+          ok: false,
+          error: {
+            code: "401",
+            message: "Du må være innlogget",
+            fieldErrors: {},
+          },
+        };
+      }
+
       const parsed = createTaskSchema.safeParse(input);
       if (!parsed.success)
         return {
@@ -141,7 +183,10 @@ export function createTaskService(_repository: TaskRepository): TaskService {
         };
       }
 
-      const result = await _repository.create({ ...parsed.data, userId: 1 });
+      const result = await _repository.create({
+        ...parsed.data,
+        userId: user.id,
+      });
 
       if (!result.ok) return result;
 
@@ -150,7 +195,18 @@ export function createTaskService(_repository: TaskRepository): TaskService {
         data: toTaskDTO(result.data),
       };
     },
-    async findById(id) {
+    async findById(user, id) {
+      if (!user) {
+        return {
+          ok: false,
+          error: {
+            code: "401",
+            message: "Du må være innlogget",
+            fieldErrors: {},
+          },
+        };
+      }
+
       const result = await _repository.findById(id);
 
       if (!result.ok) return result;
@@ -161,6 +217,18 @@ export function createTaskService(_repository: TaskRepository): TaskService {
           error: {
             code: "404",
             message: "Task finnes ikke",
+            fieldErrors: {},
+          },
+        };
+      }
+
+      // Vi vet hvem du er (ikke 401), men oppgaven er ikke din: 403.
+      if (!canAccess(user, result.data)) {
+        return {
+          ok: false,
+          error: {
+            code: "403",
+            message: "Du har ikke tilgang til denne oppgaven",
             fieldErrors: {},
           },
         };
@@ -193,7 +261,18 @@ export function createTaskService(_repository: TaskRepository): TaskService {
         ok: true,
       };
     },
-    async update(id, input) {
+    async update(user, id, input) {
+      if (!user) {
+        return {
+          ok: false,
+          error: {
+            code: "401",
+            message: "Du må være innlogget",
+            fieldErrors: {},
+          },
+        };
+      }
+
       // 1. Alle felt er valgfrie (partial), så { completed: true }
       // holder. Zod fjerner felt den ikke kjenner, som id og userId.
       const parsed = updateTaskSchema.safeParse(input);
@@ -233,11 +312,37 @@ export function createTaskService(_repository: TaskRepository): TaskService {
         };
       }
 
-      // 4. Lagre. Feiler databasen (500), sender vi feilen rett videre.
+      // 4. Finnes oppgaven, og er den din? Sjekkes FØR vi lagrer.
+      const existing = await findTask(id);
+      if (!existing.ok) return existing;
+
+      if (!existing.data) {
+        return {
+          ok: false,
+          error: {
+            code: "404",
+            message: "Task finnes ikke",
+            fieldErrors: {},
+          },
+        };
+      }
+
+      if (!canAccess(user, existing.data)) {
+        return {
+          ok: false,
+          error: {
+            code: "403",
+            message: "Du har ikke tilgang til denne oppgaven",
+            fieldErrors: {},
+          },
+        };
+      }
+
+      // 5. Lagre. Feiler databasen (500), sender vi feilen rett videre.
       const result = await _repository.update(id, parsed.data);
       if (!result.ok) return result;
 
-      // 5. Ingen rad ble endret, altså finnes ikke oppgaven.
+      // 6. Ingen rad ble endret, for eksempel slettet i mellomtiden.
       if (!result.data) {
         return {
           ok: false,

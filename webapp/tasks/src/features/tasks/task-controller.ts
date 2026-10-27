@@ -20,7 +20,7 @@ export function createTaskController(_service: TaskService): TaskController {
       await demoDelay(request, 1500);
       // ?completed=true
       const params = parseParams(request);
-      const result = await _service.list(params);
+      const result = await _service.list(ctx.user, params);
 
       if (!result.ok) {
         return Response.json(
@@ -63,7 +63,8 @@ export function createTaskController(_service: TaskService): TaskController {
         );
       }
 
-      const result = await _service.create(body);
+      // Hvem som eier oppgaven kommer fra ctx.user, aldri fra bodyen.
+      const result = await _service.create(ctx.user, body);
 
       // ok: true 201 (opprettet), ellers 400 eller 500 fra servicen.
       return result.ok
@@ -75,10 +76,10 @@ export function createTaskController(_service: TaskService): TaskController {
           });
     },
     // GET /api/v1/tasks/:id
-    async find({ params }: RequestInfo) {
-      const result = await _service.findById(params.id);
+    async find({ params, ctx }: RequestInfo) {
+      const result = await _service.findById(ctx.user, params.id);
 
-      // ok: true 200, ellers 404 (finnes ikke) eller 500 (databasen).
+      // ok: true 200, ellers 403 (ikke din), 404 (finnes ikke) eller 500.
       return result.ok
         ? Response.json(result, {
             status: 200,
@@ -114,7 +115,7 @@ export function createTaskController(_service: TaskService): TaskController {
           });
     },
     // PATCH /api/v1/tasks/:id med JSON, f.eks. { "completed": true }
-    async update({ request, params }: RequestInfo) {
+    async update({ request, params, ctx }: RequestInfo) {
       let body: unknown;
       try {
         body = await request.json();
@@ -132,11 +133,12 @@ export function createTaskController(_service: TaskService): TaskController {
         );
       }
 
-      const result = await _service.update(params.id, body);
+      const result = await _service.update(ctx.user, params.id, body);
 
       // Det servicen kan svare, og statusen vi sender:
       //   ok: true   200  den oppdaterte oppgaven
       //   "400"      400  feil form, ingen felt, eller brudd på reglene
+      //   "403"      403  oppgaven er ikke din, og du er ikke admin
       //   "404"      404  ingen oppgave med denne id-en
       //   "500"      500  noe gikk galt i databasen
       return result.ok
@@ -159,8 +161,10 @@ export function createTaskController(_service: TaskService): TaskController {
     // IKKE FERDIG. Å gjøre:
     //   1. params.action er hvilken som helst tekst fra URL-en. Sjekk den mot
     //      handlingene vi støtter ("complete", "reopen"). Ukjent gir 404.
-    //   2. Kall servicen, f.eks. _service.update(params.id, { completed: true }).
-    //   3. Send svaret med samme status som update (200, 400, 404, 500).
+    //   2. Kall servicen, f.eks.
+    //      _service.update(ctx.user, params.id, { completed: true }).
+    //      Da gjelder eiersjekken i servicen her også.
+    //   3. Send svaret med samme status som update (200, 400, 403, 404, 500).
     async action({ request, ctx }: RequestInfo) {
       const data = await _service.update();
       return null;

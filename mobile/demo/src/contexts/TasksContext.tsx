@@ -6,6 +6,7 @@ import {
   type ApiTask,
 } from "@/api/tasks";
 import type { Task } from "@/utils/task-schema";
+import { useAuth } from "./AuthContext";
 import { createContext, use, useEffect, useState } from "react";
 
 type TaskContextData = {
@@ -26,14 +27,24 @@ function toTask(apiTask: ApiTask): Task {
 }
 
 export function TasksProvider({ children }: { children: React.ReactNode }) {
+  const { token } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Henter på nytt hver gang tokenet endrer seg: ved innlogging, og når en
+  // annen bruker logger inn. Uten token er ingen innlogget, og lista tømmes.
   useEffect(() => {
-    async function load() {
+    if (!token) {
+      setTasks([]);
+      return;
+    }
+
+    async function load(token: string) {
+      setIsLoading(true);
+      setError("");
       try {
-        const apiTasks = await listTasks();
+        const apiTasks = await listTasks(token);
         setTasks(apiTasks.map(toTask));
       } catch (error) {
         setError(error instanceof Error ? error.message : "Ukjent feil");
@@ -42,8 +53,13 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    load();
-  }, []);
+    load(token);
+  }, [token]);
+
+  function requireToken() {
+    if (!token) throw new Error("Du må være innlogget");
+    return token;
+  }
 
   function toggle(id: string) {
     setTasks((prev) =>
@@ -63,7 +79,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function addApi(task: Omit<Task, "id">) {
-    const created = await createTask({
+    const created = await createTask(requireToken(), {
       title: task.title,
       completed: task.done,
     });
@@ -75,7 +91,9 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     const task = tasks.find((t) => t.id === id);
     if (!task) return;
 
-    const updated = await updateTask(id, { completed: !task.done });
+    const updated = await updateTask(requireToken(), id, {
+      completed: !task.done,
+    });
 
     setTasks((prev) => prev.map((t) => (t.id === id ? toTask(updated) : t)));
   }
@@ -86,7 +104,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
     setTasks((prev) => prev.filter((task) => task.id !== id));
 
     try {
-      await deleteTask(id);
+      await deleteTask(requireToken(), id);
     } catch (error) {
       setTasks(previous);
       throw error;
