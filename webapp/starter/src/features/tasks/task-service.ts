@@ -9,9 +9,10 @@ import z from "zod";
 import { toTaskDTO, type TaskDTO } from "./task-mapper";
 import { taskRepository, type TaskRepository } from "./task-repository";
 import { createTaskSchema } from "./task-validator";
+import { isAdmin, type SessionUser } from "../auth/auth-types";
 
 export interface TaskService {
-  list(user: any): Promise<any>;
+  list(user: SessionUser | null): Promise<any>;
   get(user: any, id: string): Promise<any>;
   create(
     user: any,
@@ -51,6 +52,28 @@ export function createTaskService(_repository: TaskRepository): TaskService {
       // Her sjekker vi kanskje rolle
       // Her kaller vi repository.findMany()
       // Her returnerer vi resultatet av det vi fikk fra repository
+      if (!user) {
+        return {
+          ok: false,
+          error: {
+            code: "401",
+            message: "Du må være innlogget",
+            fieldErrors: {},
+          },
+        };
+      }
+      const result = await _repository.list({
+        userId: isAdmin(user) ? undefined : user.id,
+      });
+
+      if (!result.ok) {
+        return result;
+      }
+
+      return {
+        ok: true,
+        data: result.data.map(toTaskDTO),
+      };
     },
     async get(user, id) {},
     async create(user, data) {

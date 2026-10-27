@@ -18,7 +18,7 @@ export interface TaskRepository {
   >;
   update: (id: string, task: any) => Promise<any>;
   get: (id: string) => Promise<any>;
-  list: () => Promise<any>;
+  list: (params?: { userId?: number }) => Promise<any>;
   remove: (id: string) => Promise<any>;
 }
 
@@ -47,9 +47,33 @@ export function createTaskRepository(_db: DB): TaskRepository {
           },
         };
       }
-    }, // implement thi,
-    list: async () => {
-      // her skriver jeg ren sql
+    },
+    async list({ userId }) {
+      try {
+        const rows = await _db.query.tasks.findMany({
+          where: {
+            userId,
+          },
+          orderBy: { createdAt: "desc" },
+          with: { user: true },
+        });
+
+        return {
+          ok: true,
+          data: rows,
+        };
+      } catch (error) {
+        console.error(error);
+
+        return {
+          ok: false,
+          error: {
+            code: "500",
+            message: "Noe gikk galt med uthentingen",
+            fieldErrors: {},
+          },
+        };
+      }
     },
     get: async (id) => {
       // her bruker prisma

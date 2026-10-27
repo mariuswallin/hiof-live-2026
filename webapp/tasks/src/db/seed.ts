@@ -8,23 +8,39 @@ export const seedData = async (env: Env) => {
   await db.delete(tasks);
   await db.delete(users);
 
-  const [user] = await db
+  // Brukerne /login viser i nedtrekkslista, med rollen sin. Faste id-er, så
+  // de er de samme hver gang seeden kjøres.
+  const [kari, ola] = await db
     .insert(users)
-    .values({ name: "Test Testesen", email: "test@example.com" })
+    .values([
+      {
+        id: 1,
+        name: "Kari Nordmann",
+        email: "kari@example.com",
+        role: "admin",
+      },
+      { id: 2, name: "Ola Hansen", email: "ola@example.com", role: "user" },
+    ])
     .returning();
 
   await db.insert(tasks).values([
     {
       title: "Lese leksjonen før timen",
       completed: true,
-      userId: user.id,
+      userId: kari.id,
       dueDate: new Date(Date.now() - 86_400_000),
     },
     {
       title: "Sette opp prosjektet",
       completed: false,
-      userId: user.id,
+      userId: kari.id,
       dueDate: new Date(Date.now() + 86_400_000),
+    },
+    {
+      // Ola sin. Ola ser bare denne. Kari er admin, og ser alle tre.
+      title: "Skrive obligen",
+      completed: false,
+      userId: ola.id,
     },
   ]);
 
