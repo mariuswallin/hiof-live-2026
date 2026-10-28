@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { z } from "zod";
 
 /**
@@ -6,10 +7,11 @@ import { z } from "zod";
  *
  * localhost virker i iOS-simulatoren (og på web), fordi den kjører på
  * Mac-en. Andre steder er "localhost" en annen maskin:
- *   Android-emulator: http://10.0.2.2:5173/api/v1
+ *   Android-emulator: 10.0.2.2 (= Mac-en sett fra emulatoren)
  *   Fysisk telefon:   http://<Mac-ens IP>:5173/api/v1
  */
-const BASE_URL = "http://localhost:5173/api/v1";
+const HOST = Platform.OS === "android" ? "10.0.2.2" : "localhost";
+export const BASE_URL = `http://${HOST}:5173/api/v1`;
 
 /**
  * En oppgave slik webappen sender den (TaskDTO i task-mapper.ts).
@@ -31,11 +33,18 @@ export type ApiTask = z.infer<typeof ApiTaskSchema>;
  *
  * NB: fetch kaster IKKE ved 400/404/500 - bare ved nettverksfeil (f.eks.
  * når webappen ikke kjører). Derfor sjekker vi response.ok selv.
+ *
+ * INNLOGGING: alle /tasks-ruter krever en bruker (401 uten). Hver funksjon
+ * tar derfor imot tokenet fra innloggingen (api/auth.ts) og sender det i
+ * `Authorization`. Det er mobilens versjon av cookien i nettleseren.
+ * Webappen ser hvem du er, og gir deg bare DINE oppgaver (admin ser alle).
  */
 
 /** LIST: GET /api/v1/tasks -> { ok: true, data: [...] } */
-export async function listTasks(): Promise<ApiTask[]> {
-  const response = await fetch(`${BASE_URL}/tasks`);
+export async function listTasks(token: string): Promise<ApiTask[]> {
+  const response = await fetch(`${BASE_URL}/tasks`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
 
   if (!response.ok) {
     throw new Error(`Kunne ikke hente oppgaver (${response.status})`);
@@ -45,9 +54,14 @@ export async function listTasks(): Promise<ApiTask[]> {
   return z.object({ data: z.array(ApiTaskSchema) }).parse(json).data;
 }
 
-/** BY ID: GET /api/v1/tasks/:id -> { ok: true, data: {...} } */
-export async function getTask(id: string): Promise<ApiTask> {
-  const response = await fetch(`${BASE_URL}/tasks/${encodeURIComponent(id)}`);
+/**
+ * BY ID: GET /api/v1/tasks/:id -> { ok: true, data: {...} }
+ * 403 hvis oppgaven er en annens (og du ikke er admin), 404 hvis den ikke finnes.
+ */
+export async function getTask(token: string, id: string): Promise<ApiTask> {
+  const response = await fetch(`${BASE_URL}/tasks/${encodeURIComponent(id)}`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
 
   if (!response.ok) {
     throw new Error(`Kunne ikke hente oppgave ${id} (${response.status})`);
@@ -61,15 +75,23 @@ export async function getTask(id: string): Promise<ApiTask> {
  * CREATE: POST /api/v1/tasks med JSON i body.
  *   201 -> { ok: true, data: {...} }   oppgaven, med id-en SERVEREN laget
  *   400 -> { ok: false, error: {...} } f.eks. for lang tittel
+ *
+ * Hvem som eier oppgaven, bestemmer webappen ut fra tokenet - ikke bodyen.
  */
-export async function createTask(input: {
-  title: string;
-  completed: boolean;
-}): Promise<ApiTask> {
+export async function createTask(
+  token: string,
+  input: {
+    title: string;
+    completed: boolean;
+  },
+): Promise<ApiTask> {
   const response = await fetch(`${BASE_URL}/tasks`, {
     method: "POST",
-    // Forteller serveren at body er JSON.
-    headers: { "content-type": "application/json" },
+    headers: {
+      // Forteller serveren at body er JSON.
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
     // fetch sender tekst - objektet må gjøres om til en JSON-streng selv.
     body: JSON.stringify(input),
   });

@@ -34,3 +34,14 @@ export function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
 export function forget(key: string) {
   promises.delete(key);
 }
+
+/**
+ * Glem ALT. Brukes når noen logger inn eller ut (AuthContext.tsx).
+ *
+ * Alt i cachen ble hentet med forrige brukers token. Lar vi det ligge, ser
+ * neste bruker forrige brukers liste - eller sin egen, gamle liste fra sist
+ * hen var innlogget.
+ */
+export function clear() {
+  promises.clear();
+}

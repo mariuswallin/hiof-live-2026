@@ -18,6 +18,10 @@ pnpm install
 pnpm start        # trykk i (iOS), a (Android) eller w (web)
 ```
 
+Webappen må kjøre (`npm run dev` i `hiof-live-2026/webapp/tasks`). Appen logger inn mot
+den (`POST /api/v1/login`) og sender tokenet med på alle kall til `/api/v1/tasks`.
+Brukere i seeden: Kari Nordmann (id 1, admin) og Ola Hansen (id 2, user).
+
 ---
 
 ## 1. Grunnideen: filer = skjermer
@@ -38,7 +42,8 @@ skjerm, og filstien er URL-en.
 
 ```
 Stack                      (src/app/_layout.tsx)
-├── Tabs                   (src/app/(tabs)/_layout.tsx)
+├── Logg inn (beskyttet)   /login      kun når ingen er innlogget
+├── Tabs                   (src/app/(tabs)/_layout.tsx)   resten: kun innlogget
 │   ├── Hjem               /
 │   ├── Oppgaver           → Stack (tasks/_layout.tsx)
 │   │     ├── liste         /tasks
@@ -70,18 +75,19 @@ den ene inne i en tab, den andre utenfor.
 
 | Fil | Hva den gjør | Nøkkelbegreper |
 | --- | --- | --- |
-| `_layout.tsx` | Rot-Stack. Pakker hele appen i providers (`QueryClientProvider`, `AuthProvider`, `TasksProvider`). `<Suspense>` rundt `TasksProvider` viser «Henter oppgaver …» mens `use()` venter, og `ErrorBoundary`-eksporten viser feil med «Prøv igjen». `RootNavigator` viser «Henter bruker …» til rollen er kjent, og beskytter `admin` med `Stack.Protected`. Registrerer `(tabs)` og `users` uten header, og `new-task`, `settings` og `about` som vanlige Stack-skjermer. `initialRouteName: "(tabs)"` legger tabs under når en skjerm utenfor tabs åpnes direkte. | `Stack`, providers over navigatoren, `unstable_settings`, `Suspense`, `ErrorBoundary` |
+| `_layout.tsx` | Rot-Stack. Pakker hele appen i providers (`QueryClientProvider`, `AuthProvider`, `TasksProvider`). `<Suspense>` rundt `TasksProvider` viser «Henter oppgaver …» mens `use()` venter, og `ErrorBoundary`-eksporten viser feil med «Prøv igjen». `RootNavigator` bruker `Stack.Protected`: `login` bare når ingen er innlogget, resten bare når noen er det, og `admin` bare for `role: "admin"`. Registrerer `(tabs)` og `users` uten header, og `new-task`, `settings` og `about` som vanlige Stack-skjermer. `initialRouteName: "(tabs)"` legger tabs under når en skjerm utenfor tabs åpnes direkte. | `Stack`, providers over navigatoren, `unstable_settings`, `Suspense`, `ErrorBoundary` |
+| `login.tsx` | Jukseinnlogging: velg Kari (admin) eller Ola (user), uten passord. Kaller `login(userId)` fra `useAuth()` og viser feilen hvis webappen sier nei. Ingen `router.replace` – `Stack.Protected` bytter skjerm når `user` settes. | `Stack.Protected`, `useAuth()` |
 | `new-task.tsx` | Vanlig Stack-skjerm som bruker `TaskRegister` (samme skjema som i hiof-live-2026). Validerer tittelen med zod, kaller `add()` og går tilbake med `router.back()`. | Stack-skjerm utenfor tabs, `router.back()`, context |
-| `settings.tsx` | Skjerm i rot-Stacken, utenfor `(tabs)/` – derfor ingen tab-bar, men tilbake-knapp. Viser innlogget bruker fra **custom hook** `useCurrentUser()` – hentes på nytt hver gang skjermen åpnes. | skjerm utenfor tabs, custom hook |
+| `settings.tsx` | Skjerm i rot-Stacken, utenfor `(tabs)/` – derfor ingen tab-bar, men tilbake-knapp. Viser innlogget bruker fra **custom hook** `useCurrentUser()` – som har sin egen, tomme state, så her er *ingen* innlogget. | skjerm utenfor tabs, custom hook |
 | `about.tsx` | Enda en skjerm utenfor tabs. | |
-| `admin.tsx` | **Beskyttet** skjerm, kun for admin. Ligger i rot-Stacken, så den kan åpnes fra hvor som helst. Beskyttes av `<Stack.Protected guard={isAdmin}>` i `_layout.tsx` – skjermen sjekker ikke rollen selv. Knapp som bytter til vanlig bruker viser at man kastes ut. | `Stack.Protected`, `guard` |
+| `admin.tsx` | **Beskyttet** skjerm, kun for admin. Ligger i rot-Stacken, så den kan åpnes fra hvor som helst. Beskyttes av `<Stack.Protected guard={isAdmin}>` i `_layout.tsx` – skjermen sjekker ikke rollen selv. Knapp som logger inn som vanlig bruker viser at man kastes ut. | `Stack.Protected`, `guard` |
 | `+not-found.tsx` | Fallback for ukjente URL-er, med lenke til `/`. | `+not-found` |
 | `users/_layout.tsx` | Stack for en mappe **utenfor tabs** – samme mønster som `tasks/_layout.tsx`. `initialRouteName: "index"` legger lista under når `/users/68` åpnes direkte. | Stack utenfor tabs, nøstet Stack |
 | `users/index.tsx` | Lista over brukere (`/users`), hentet på den **«gamle» måten**: `useState` + `useEffect` + `AbortController` (`listUsers`). Hver rad er en `UserItem`. | `useEffect`, `FlatList` |
 | `users/[userId].tsx` | **Dynamisk rute utenfor tabs.** Henter brukeren med `useEffect` (`getUser`), uten cache. «Neste bruker» åpner samme fil med ny parameter (`Link push`). | `useLocalSearchParams`, `Number(param)`, `push`, `useEffect` |
 | `(tabs)/_layout.tsx` | Tab-baren: Hjem, Oppgaver, Profil. Ikoner og badge med antall åpne oppgaver. | `Tabs`, `tabBarIcon`, `tabBarBadge` |
 | `(tabs)/index.tsx` | Hjem (`/`). Hilser på innlogget bruker (`useAuth()`), viser status og **alle måtene å navigere på**: `Link` til annen tab, rett inn på `/tasks/3`, lenke til skjerm utenfor tabs, `router.push` til «Ny oppgave», lenker til `/users` og rett til `/users/68`. | `Link`, `router.push/replace/back` |
-| `(tabs)/profile.tsx` | Enkel tab uten egen Stack. Viser innlogget bruker fra `useAuth()`, knapp som henter brukeren på nytt, lenker til `/settings` og `/about`. | tab uten stack, `useAuth()` |
+| `(tabs)/profile.tsx` | Enkel tab uten egen Stack. Viser innlogget bruker fra `useAuth()`, «Logg ut», «Bytt konto» (logg inn som den andre webapp-brukeren), lenker til `/settings` og `/about`. | tab uten stack, `useAuth()` |
 | `(tabs)/tasks/_layout.tsx` | Stack **inne i** Oppgaver-taben. Tilbake-knapp på alt over lista. `initialRouteName: "index"` sørger for at lista alltid ligger under detaljsiden. `SuspenseFallback`-eksporten er laster-skjermen for barna mens de venter på `use()`. | Stack i tab, `unstable_settings`, `SuspenseFallback` |
 | `(tabs)/tasks/index.tsx` | Lista: `<TaskList tasks={tasks} onToggle={toggle} />`, som i demoens `index.tsx`. Ingen laster-/feilsjekk – Suspense i `_layout.tsx` tar seg av det. Legger til `+` i headeren med `<Stack.Screen options>` fra selve skjermen. | skjerm styrer egen header |
 | `(tabs)/tasks/[id].tsx` | **Detaljsiden.** Leser `id` fra URL-en, slår opp oppgaven i context, dynamisk tittel, fullfør/slett. Henter `dummyjson.com/todos/:id` med **`use(cached(...))`** – etter en `if`/`return`. Venter → `SuspenseFallback` fra layouten, feiler → egen `ErrorBoundary`-eksport med «Prøv igjen». Viser et bilde bygget fra svaret, og sender `userId` videre med en `Link`. | `useLocalSearchParams`, `use()`, `ErrorBoundary`, `Image` |
@@ -110,13 +116,14 @@ Samme mapper og filnavn som i `mobile/demo` og `mobile/navigation` (`tasks/` og
 
 | Fil | Hva den gjør |
 | --- | --- |
-| `contexts/TasksContext.tsx` | Samme `TasksProvider` + `useTasks()` som i demoen (`toggle`, `add(task)`), pluss `remove`. **Henter oppgavene med `use(cached(TASKS_KEY, loadTasks))`** (`listTodos` → `Todo` til `Task`) – ingen `isLoading`/`error`; `useState(initialTasks)` når lista er klar. Nå nødvendig: skjermene lages av ruteren og **kan ikke få props**. |
-| `contexts/AuthContext.tsx` | `AuthProvider` + `useAuth()`: `user`, `isLoading`, `isAdmin`, `reload`, `loginAs(role)`. Henter innlogget bruker **ved hver oppstart/refresh** og legger den i context. Kommentaren øverst forklarer hvor lenge brukeren «lever». |
-| `contexts/AuthContextV2.tsx` | **Ny versjon** av `AuthContext.tsx` (som står urørt): samme `AuthProvider` + `useAuth()`, men hentingen ligger i `useCurrentUser()`. Provideren kaller hooken én gang og deler resultatet. Brukes ikke av appen – bytt importen i `_layout.tsx`, `(tabs)/index.tsx`, `(tabs)/profile.tsx` og `admin.tsx` for å prøve. |
-| `hooks/useCurrentUser.ts` | **Custom hook**: `useState` + `useEffect` rundt `fetchCurrentUser()`. Gir `user`, `isLoading`, `isAdmin`, `reload`, `refetch` – samme form som `useAuth()` (minus `loginAs`). Duplikat av `AuthProvider` med vilje: staten bor i komponenten, så hver skjerm får sin egen kopi og egen henting. |
-| `api/auth.ts` | `AuthUserSchema` (bruker + `role: "admin" \| "user"`). `fetchCurrentUser()` – **simulert** `GET /me` (800 ms, validert med zod). To kontoer: Ola (`user`, standard) og Kari (`admin`). `simulateLogin(role)` bytter konto. Logger `[auth] Henter …` så man ser *når* den kjører. |
+| `contexts/TasksContext.tsx` | Samme `TasksProvider` + `useTasks()` som i demoen (`toggle`, `add(task)`), pluss `remove`. **Henter oppgavene med `use(cached(TASKS_KEY, ...))`** (`listTasks(token)` → `ApiTask` til `Task`) – bare når noen er innlogget, ingen `isLoading`/`error`; `useState(initialTasks)` når lista er klar, og `tasksFor` bytter lista når tokenet endres. Nå nødvendig: skjermene lages av ruteren og **kan ikke få props**. |
+| `contexts/AuthContext.tsx` | `AuthProvider` + `useAuth()`: `user`, `token`, `role`, `isAdmin`, `login(userId)`, `logout()`. Token og bruker ligger **bare i minnet** – etter en refresh må du logge inn igjen. `login`/`logout` tømmer cachen. Kommentaren øverst forklarer hvor lenge innloggingen «lever». |
+| `contexts/AuthContextV2.tsx` | **Ny versjon** av `AuthContext.tsx` (som står urørt): samme `AuthProvider` + `useAuth()`, men staten og `login`/`logout` ligger i `useCurrentUser()`. Provideren kaller hooken én gang og deler resultatet. Brukes ikke av appen – bytt importen i alle filene som importerer `@/contexts/AuthContext` for å prøve. |
+| `hooks/useCurrentUser.ts` | **Custom hook**: samme `useState` + `login`/`logout` som `AuthProvider`. Duplikat med vilje: staten bor i komponenten, så hver skjerm får sin egen kopi – i `settings.tsx` er derfor ingen innlogget. |
+| `api/auth.ts` | `ApiUserSchema` (`id`, `name`, `email`, `role: "admin" \| "user"`). `login(userId)` – `POST /api/v1/login` i webappen → `{ token, user }`, validert med zod. Rollen kommer fra webappen. Jukseauth: ingen passord, tokenet er bare id-en. |
+| `api/tasks.ts` | `listTasks`, `getTask`, `createTask` mot webappen. Tar `token` først og sender `authorization: Bearer <token>`. `BASE_URL` bruker `10.0.2.2` på Android-emulatoren. |
 | `api/dummy-json.ts` | Zod-skjemaer (`TodoSchema`, `UserSchema`) og to generiske hjelpere: `list(ressurs, skjema)` (`GET /users` → pakker ut `{ users: [...] }`) og `getById(ressurs, id, skjema)`. Ferdige kall: `listUsers`, `getUser`, `listTodos`, `getTodo`. Sjekker `response.ok` (fetch kaster ikke ved 404) og validerer svaret med zod. Tar imot `signal` så forespørselen kan avbrytes. |
-| `api/cache.ts` | `cached(key, load)` – samme promise for samme nøkkel, som `use()` krever. `forget(key)` brukes av «Prøv igjen». |
+| `api/cache.ts` | `cached(key, load)` – samme promise for samme nøkkel, som `use()` krever. `forget(key)` brukes av «Prøv igjen». `clear()` tømmer alt ved innlogging/utlogging, så ingen ser forrige brukers liste. |
 | `constants/theme.ts` | Farger, avstander, radius, skriftstørrelser (samme som demoen). |
 | `utils/task-schema.ts` | Demoens `TaskSchema` (+ `trim()` og norske feilmeldinger) og `NewTaskSchema` (= alt unntatt `id`). |
 
@@ -175,19 +182,20 @@ involvert, og «tilbake» går likevel til lista (`initialRouteName`). «Neste b
 samme fil med ny parameter. Her hentes med `useEffect` + `useState` – sammenlign med
 `tasks/`: tre tilstander for hånd, og ny henting hver gang.
 
-**Steg 10 – Innlogget bruker i context**
-`contexts/AuthContext.tsx`: les livsløpet i kommentaren. Start appen og se
-`[auth] Henter innlogget bruker` i konsollen – én gang. Bytt tab, åpne detalj og
-«Ny oppgave»: ingen ny henting. Refresh (F5 / «r» i Metro): borte fra minnet → hentes
-på nytt. «Hent bruker på nytt» på Profil simulerer det samme. Åpne Innstillinger: den
-bruker custom hooken `useCurrentUser()` – ny logglinje *hver* gang skjermen åpnes.
+**Steg 10 – Innlogging mot webappen i context**
+`contexts/AuthContext.tsx`: les livsløpet i kommentaren. Start appen: bare «Logg inn».
+Logg inn som Ola → `POST /api/v1/login` → token + bruker i context, og alle kall til
+`/api/v1/tasks` sender `Authorization: Bearer <token>`. Bytt tab, åpne detalj og
+«Ny oppgave»: fortsatt innlogget. Refresh (F5 / «r» i Metro): tokenet er borte fra
+minnet → «Logg inn» igjen. «Logg ut» på Profil gjør det samme. Åpne Innstillinger: den
+bruker custom hooken `useCurrentUser()` – egen, tom state, så der er ingen innlogget.
 
 **Steg 11 – Rolle og beskyttet rute**
 `_layout.tsx`: `<Stack.Protected guard={isAdmin}>` rundt `admin`. Som Ola (`user`): ingen
-lenke på Hjem, og `/admin` i adressefeltet → sendes til `/`. Profil → «Logg inn som admin»
-→ lenken dukker opp → åpne `/admin` → «Bytt til vanlig bruker» → kastes ut. Poeng: å skjule
-lenken er ikke beskyttelse, og `Stack.Protected` beskytter bare skjermen – API-et må selv
-sjekke rollen.
+lenke på Hjem, og bare egne oppgaver. Profil → «Logg inn som Kari Nordmann (admin)» →
+lenken dukker opp, og alle oppgavene vises → åpne `/admin` → «Bytt til vanlig bruker» →
+kastes ut. Poeng: å skjule lenken er ikke beskyttelse, og `Stack.Protected` beskytter bare
+skjermen – det er webappen som sjekker tokenet (401) og rollen (403 på `DELETE`).
 
 Mer detaljert gjennomgang med «Prøv» og spørsmål per steg: se `STEPS.md`.
 
@@ -202,7 +210,7 @@ Mer detaljert gjennomgang med «Prøv» og spørsmål per steg: se `STEPS.md`.
 | `TaskList` med `TaskRegister` inni, `.map` | `TaskList` med `FlatList`, `TaskRegister` på egen skjerm |
 | `TaskItem`: hele raden toggler | `TaskItem`: raden er en `Link`, boksen toggler |
 | `TaskLayout` tegner header | Navigatoren tegner header og tab-bar |
-| `useState(TASKS)` – data fra lokal konstant | `use()` + Suspense – lista hentes fra API i `TasksContext`. Også `useEffect` (`users/`), `useQuery` og innlogget bruker med rolle (`AuthContext`) |
+| `useState(TASKS)` – data fra lokal konstant | `use()` + Suspense – lista hentes fra API i `TasksContext`. Også `useEffect` (`users/`), `useQuery` og innlogging mot webappen med token og rolle (`AuthContext`) |
 | Ingen tilgangsstyring | `/admin` beskyttet med `Stack.Protected` |
 
 ## 6. Forskjeller fra `mobile/navigation`
@@ -355,6 +363,9 @@ Med `pnpm start` kjørende:
 virker først i en development build (`npx expo run:ios`). Bytt `tasks/3` med `finnes-ikke`
 for å se `+not-found`. Fysisk telefon: bruk IP-en Metro viser i terminalen.
 
+NB: alt unntatt `/login` krever innlogging. På web laster adressefeltet hele siden på nytt,
+tokenet i minnet er borte, og du havner på `/login`.
+
 **Hvorfor to `Pressable` i `TaskItem.tsx`?**
 Raden har to handlinger: trykk på raden → **naviger** til detalj, trykk på boksen →
 **toggle** (bli på lista). Når to Pressable er nøstet, får den innerste trykket – så et
@@ -379,8 +390,9 @@ til API-et (POST/PATCH/DELETE) eller lagres lokalt (AsyncStorage/SQLite).
 **Hva er forskjellen på en custom hook og en context?**
 En custom hook (`hooks/useCurrentUser.ts`) gjenbruker *logikk* – hver komponent som kaller
 den får sin egen state og sin egen henting. En context (`useAuth()`) deler *state* – én
-henting i provideren, samme verdi overalt. Bytt konto på Profil: `useAuth()` oppdateres
-over alt, `useCurrentUser()` i Innstillinger først neste gang skjermen åpnes. Derfor bruker
+innlogging i provideren, samme verdi overalt. Bytt konto på Profil: `useAuth()` oppdateres
+over alt, mens `useCurrentUser()` i Innstillinger har sin egen, tomme kopi og aldri får
+vite det. Derfor bruker
 `Stack.Protected` context. `contexts/AuthContextV2.tsx` kombinerer dem: hooken kalles én
 gang i provideren, og context deler resultatet.
 
@@ -461,9 +473,10 @@ læring.
 | --- | --- | --- | --- |
 | Util | `src/utils/task-schema.test.ts` | Vitest | `pnpm test` |
 | Komponent | `src/components/tasks/TaskRegister.test.tsx` | Vitest + vitest-native + Testing Library | `pnpm test` |
-| E2E | `e2e/navigation.spec.ts` – liste → detalj → eier, «Ny oppgave» oppå tabs, `/users/68` direkte, feiltilstander | Playwright (web) | `pnpm e2e` |
-| E2E | `e2e/auth.spec.ts` – brukeren hentes ved oppstart og refresh, ikke ved navigasjon | Playwright (web) | `pnpm e2e` |
-| E2E | `e2e/admin.spec.ts` – vanlig bruker sendes bort fra `/admin`, admin kommer inn og kastes ut ved rollebytte | Playwright (web) | `pnpm e2e` |
+| API | `src/api/tasks.test.ts`, `src/api/auth.test.ts` – `fetch` mocket: URL, metode, body og `authorization`-header, feil fra webappen (400/401/403/500) | Vitest | `pnpm test` |
+| E2E | `e2e/navigation.spec.ts` – logg inn → liste → detalj, «Ny oppgave» oppå tabs, `/users/68` via lenken på Hjem, feiltilstander | Playwright (web) | `pnpm e2e` |
+| E2E | `e2e/auth.spec.ts` – innloggingen lever til refresh, dyplenker uten innlogging → `/login`, logg ut, kontobytte henter ny liste | Playwright (web) | `pnpm e2e` |
+| E2E | `e2e/admin.spec.ts` – vanlig bruker ser ikke admin, admin kommer inn og kastes ut ved kontobytte | Playwright (web) | `pnpm e2e` |
 
 `pnpm test:watch` kjører Vitest på nytt ved lagring, `pnpm e2e:ui` viser hvert steg i
 Playwrights UI. Første gang e2e: `npx playwright install chromium`.
@@ -475,12 +488,14 @@ tittel, og at mellomrom ikke teller.
 trykker på knappen (`fireEvent.press`) og sjekker at `onRegister` ble kalt med riktig
 tittel (`vi.fn()`).
 
-**E2E-testen** starter Expo web, mocker `dummyjson.com` med `page.route`, og går gjennom
-Hjem → Oppgaver-taben → `/tasks/3` → `/tasks/user/68` → tilbake → tilbake. En test åpner
-`+` → `/new-task`, sjekker at tab-baren er borte, lagrer og havner tilbake på lista med
-den nye oppgaven. En test åpner `/users/68` direkte (ingen tab-bar), går til neste bruker
-med `push`, og tilbake to ganger til lista som `initialRouteName` la under. To tester lar
-API-et svare 500 og sjekker feilmeldingene.
+**E2E-testene** starter Expo web og mocker webappen (`POST /api/v1/login` og
+`/api/v1/tasks`) og `dummyjson.com` med `page.route`. Mocken svarer 401 uten riktig
+`Authorization`-header, som webappen. Alle tester logger inn via «Logg inn» først, og
+navigerer så med klikk: `page.goto` laster siden på nytt, og da er tokenet borte.
+`navigation.spec.ts` går Hjem → Oppgaver-taben → `/tasks/3` → tilbake, åpner `+` →
+`/new-task` (ingen tab-bar, POST med token), åpner `/users/68` fra Hjem og går til neste
+bruker med `push`, og lar API-et svare 500. `/tasks/user/68` har ingen lenke i appen, og
+dekkes derfor ikke av e2e lenger.
 
 Oppsett:
 - `vitest.config.mts` – `reactNative()` fra **vitest-native** kjører *ekte* React

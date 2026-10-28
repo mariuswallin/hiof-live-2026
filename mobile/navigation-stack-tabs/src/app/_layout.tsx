@@ -16,6 +16,7 @@ import { TASKS_KEY, TasksProvider } from "@/contexts/TasksContext";
  * Expo Router bygger navigasjonen fra MAPPESTRUKTUREN i src/app:
  *
  *   _layout.tsx            <- denne fila: rot-Stack
+ *   login.tsx              <- kun når ingen er innlogget      "/login"
  *   new-task.tsx           <- skjema, legges OPPÅ tab-baren   "/new-task"
  *   settings.tsx           <- utenfor tabs                    "/settings"
  *   about.tsx              <- utenfor tabs                    "/about"
@@ -59,6 +60,9 @@ export const unstable_settings = {
  *
  * "Prøv igjen": glem promiset som feilet (se api/cache.ts), og la retry()
  * rendre layouten på nytt. Da starter use() en ny henting.
+ *
+ * NB: AuthProvider ligger også INNI denne boundaryen. retry() lager den på
+ * nytt - tokenet er borte, og du må logge inn igjen (som etter en refresh).
  */
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   return (
@@ -86,12 +90,11 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       {/*
         AuthProvider ytterst av våre egne providers:
-        - Den mountes ÉN gang når appen starter og henter brukeren da.
-        - Den unmountes aldri når vi navigerer, så brukeren "lever" i
+        - Den mountes ÉN gang når appen starter. Da er ingen innlogget.
+        - Den unmountes aldri når vi navigerer, så innloggingen "lever" i
           context helt til appen refreshes/lukkes (se AuthContext.tsx).
-        - Over TasksProvider, fordi oppgaver hører til en bruker. Skal
-          hver bruker ha sine egne oppgaver, kan TasksProvider bruke
-          useAuth() for å vite HVEM den skal hente for.
+        - Over TasksProvider, fordi oppgaver hører til en bruker:
+          TasksProvider bruker useAuth() for å sende tokenet til webappen.
       */}
       <AuthProvider>
         {/*
@@ -99,8 +102,8 @@ export default function RootLayout() {
           venter, vises fallback i stedet for alt inni <Suspense>. Ingen
           skjerm trenger egen "laster"-sjekk for oppgavene.
 
-          Inni AuthProvider, ikke utenfor: da mountes AuthProvider med en
-          gang, og brukeren og oppgavene hentes SAMTIDIG.
+          Før innlogging hentes ingenting. Etter login() (og ved kontobytte)
+          vises fallbacken til den nye brukerens liste er hentet.
         */}
         <Suspense
           fallback={
@@ -124,18 +127,11 @@ export default function RootLayout() {
  * ikke bruke hooken selv.
  */
 function RootNavigator() {
-  const { isLoading, isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
 
-  // Før brukeren er hentet vet vi ikke rollen. Viser vi appen nå, er isAdmin
-  // false - og en admin som refresher på /admin blir kastet ut før svaret
-  // kommer. Derfor: ingen navigator før vi vet hvem brukeren er.
-  if (isLoading) {
-    return (
-      <View style={styles.loading}>
-        <Loading label="Henter bruker ..." />
-      </View>
-    );
-  }
+  // Når user settes (login) eller fjernes (logout), bytter Stack.Protected
+  // skjerm selv - ingen router.replace("/login") noe sted.
+  const isLoggedIn = user !== null;
 
   return (
     <Stack
@@ -144,38 +140,51 @@ function RootNavigator() {
         contentStyle: { backgroundColor: Theme.background },
       }}
     >
-      {/* Tab-baren har sine egne headere - skjul rot-Stackens. */}
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-
       {/*
-        Vanlige Stack-skjermer UTENFOR tabs. De legges oppå tab-baren og får
-        rot-Stackens header med tilbake-knapp automatisk.
+        INNLOGGING. Finnes bare når ingen er innlogget. Alt annet finnes bare
+        når noen ER det - så uten innlogging er /login den eneste skjermen.
+        Dyplenker til /tasks/3 o.l. sendes hit.
       */}
-      <Stack.Screen name="new-task" options={{ title: "Ny oppgave" }} />
-      <Stack.Screen name="settings" options={{ title: "Innstillinger" }} />
-      <Stack.Screen name="about" options={{ title: "Om appen" }} />
+      <Stack.Protected guard={!isLoggedIn}>
+        <Stack.Screen name="login" options={{ title: "Logg inn" }} />
+      </Stack.Protected>
 
-      {/*
-        Mappe med egen Stack (users/_layout.tsx) - samme mønster som
-        Oppgaver-taben, men utenfor tabs. Den har egen header, så vi skjuler
-        rot-Stackens. Ellers får vi to headere oppå hverandre.
-      */}
-      <Stack.Screen name="users" options={{ headerShown: false }} />
+      <Stack.Protected guard={isLoggedIn}>
+        {/* Tab-baren har sine egne headere - skjul rot-Stackens. */}
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-      {/*
-        BESKYTTET RUTE. guard={false} = ruten finnes ikke for denne brukeren:
-        - Link/router.push/dyplenke til /admin -> sendes til "/" i stedet.
-        - Står man PÅ /admin og guard blir false (f.eks. bytter til vanlig
-          bruker), sendes man ut automatisk og /admin fjernes fra historikken.
+        {/*
+          Vanlige Stack-skjermer UTENFOR tabs. De legges oppå tab-baren og får
+          rot-Stackens header med tilbake-knapp automatisk.
+        */}
+        <Stack.Screen name="new-task" options={{ title: "Ny oppgave" }} />
+        <Stack.Screen name="settings" options={{ title: "Innstillinger" }} />
+        <Stack.Screen name="about" options={{ title: "Om appen" }} />
 
-        Ligger i rot-Stacken (som new-task), så den kan åpnes fra hvor som
-        helst og legger seg over tab-baren.
+        {/*
+          Mappe med egen Stack (users/_layout.tsx) - samme mønster som
+          Oppgaver-taben, men utenfor tabs. Den har egen header, så vi skjuler
+          rot-Stackens. Ellers får vi to headere oppå hverandre.
+        */}
+        <Stack.Screen name="users" options={{ headerShown: false }} />
 
-        NB: dette skjuler bare skjermen i APPEN. Dataene må beskyttes på
-        serveren - API-et må selv sjekke rollen på hver forespørsel.
-      */}
-      <Stack.Protected guard={isAdmin}>
-        <Stack.Screen name="admin" options={{ title: "Admin" }} />
+        {/*
+          BESKYTTET RUTE, inni den forrige. guard={false} = ruten finnes ikke
+          for denne brukeren:
+          - Link/router.push/dyplenke til /admin -> sendes til "/" i stedet.
+          - Står man PÅ /admin og guard blir false (f.eks. bytter til vanlig
+            bruker), sendes man ut automatisk og /admin fjernes fra historikken.
+
+          Ligger i rot-Stacken (som new-task), så den kan åpnes fra hvor som
+          helst og legger seg over tab-baren.
+
+          NB: dette skjuler bare skjermen i APPEN. Dataene må beskyttes på
+          serveren - og det gjør webappen: DELETE /api/v1/tasks/:id svarer 403
+          for alle som ikke er admin.
+        */}
+        <Stack.Protected guard={isAdmin}>
+          <Stack.Screen name="admin" options={{ title: "Admin" }} />
+        </Stack.Protected>
       </Stack.Protected>
 
       <Stack.Screen name="+not-found" options={{ title: "Oops" }} />

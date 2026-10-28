@@ -1,72 +1,55 @@
 import { z } from "zod";
 
-import { UserSchema } from "@/api/dummy-json";
+import { BASE_URL } from "@/api/tasks";
 
 /**
- * Innlogget bruker = vanlig bruker + ROLLE. Rollen bestemmer hva brukeren
- * får se (f.eks. /admin). z.enum gir oss både sjekken og typen
- * "admin" | "user".
+ * Innlogget bruker slik webappen sender den: id, navn, e-post og ROLLE.
+ * Rollen bestemmer hva brukeren får se (f.eks. /admin). z.enum gir oss både
+ * sjekken og typen "admin" | "user".
+ *
+ * Appen bestemmer aldri rollen selv - den kommer fra webappen.
  */
-export const RoleSchema = z.enum(["admin", "user"]);
+export const ApiUserSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string(),
+  role: z.enum(["admin", "user"]),
+});
 
-export type Role = z.infer<typeof RoleSchema>;
-
-export const AuthUserSchema = UserSchema.extend({ role: RoleSchema });
-
-export type AuthUser = z.infer<typeof AuthUserSchema>;
-
-/** "Databasen" på serveren: én konto per rolle. */
-const ACCOUNTS: Record<Role, unknown> = {
-  user: {
-    id: 1,
-    firstName: "Ola",
-    lastName: "Nordmann",
-    email: "ola.nordmann@hiof.no",
-    image: "https://dummyjson.com/icon/olanordmann/128",
-    role: "user",
-  },
-  admin: {
-    id: 2,
-    firstName: "Kari",
-    lastName: "Admin",
-    email: "kari.admin@hiof.no",
-    image: "https://dummyjson.com/icon/kariadmin/128",
-    role: "admin",
-  },
-};
+export type ApiUser = z.infer<typeof ApiUserSchema>;
 
 /**
- * Hvem er logget inn på denne enheten?
+ * INNLOGGING: POST /api/v1/login i webapp/tasks, med { userId } i body.
+ *   200 -> { ok: true,  data: { token, user } }
+ *   400 -> { ok: false, error: { message, ... } }   f.eks. ukjent bruker
  *
- * I en ekte app: en TOKEN fra innloggingen, lagret i expo-secure-store - den
- * overlever refresh. Her: en vanlig variabel i JS-minnet. Etter en refresh er
- * du derfor tilbake til standardkontoen (Ola, vanlig bruker).
+ * Tokenet sender vi med på alle kall etterpå (se api/tasks.ts). Webappen
+ * slår opp brukeren fra tokenet - INKLUDERT rollen.
+ *
+ * USIKKERT: ingen passord, og tokenet er bare bruker-id-en (jukseauth i
+ * webappen, se readBearerUserId i session.ts). Ekte app: e-post + passord
+ * inn, et signert eller tilfeldig token ut.
  */
-let loggedInAs: Role = "user";
+export async function login(
+  userId: number,
+): Promise<{ token: string; user: ApiUser }> {
+  const response = await fetch(`${BASE_URL}/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ userId }),
+  });
 
-/** Simulert innlogging. Ekte app: POST /login -> ny token -> lagre den. */
-export function simulateLogin(role: Role) {
-  loggedInAs = role;
-}
+  const json = await response.json();
 
-/**
- * SIMULERT "hvem er jeg?"-kall - i et ekte API typisk GET /me, med tokenen i
- * headeren:
- *
- *   fetch(`${BASE_URL}/me`, { headers: { Authorization: `Bearer ${token}` } })
- *
- * Serveren slår opp tokenen og svarer med brukeren - INKLUDERT rollen. Appen
- * bestemmer aldri rollen selv, den får den fra API-et.
- */
-export async function fetchCurrentUser(): Promise<AuthUser> {
-  // Se i terminalen/konsollen: denne linjen kommer ved OPPSTART og REFRESH,
-  // men IKKE når du bytter tab, åpner detaljsiden eller "ny oppgave".
-  console.log("[auth] Henter innlogget bruker fra API ...");
+  if (!response.ok) {
+    throw new Error(
+      json.error?.message ?? `Kunne ikke logge inn (${response.status})`,
+    );
+  }
 
-  // Lat som nettverket bruker litt tid, så vi ser laster-tilstanden.
-  await new Promise((resolve) => setTimeout(resolve, 800));
-
-  // Data "fra nettet" valideres før vi stoler på det - også når det er
-  // simulert. Feil rolle (f.eks. "superadmin") ville kastet her.
-  return AuthUserSchema.parse(ACCOUNTS[loggedInAs]);
+  // Data "fra nettet" valideres før vi stoler på det. Feil rolle (f.eks.
+  // "superadmin") ville kastet her.
+  return z
+    .object({ data: z.object({ token: z.string(), user: ApiUserSchema }) })
+    .parse(json).data;
 }

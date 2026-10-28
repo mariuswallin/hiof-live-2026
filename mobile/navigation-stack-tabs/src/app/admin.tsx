@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { StyleSheet, Text } from "react-native";
 
 import { Button } from "@/components/shared/Button";
@@ -16,16 +17,27 @@ import { useTasks } from "@/contexts/TasksContext";
  *   </Stack.Protected>
  *
  * Derfor trenger ikke skjermen sjekke rollen selv: rendres den, er
- * brukeren admin. Prøv som vanlig bruker å åpne /admin direkte i
- * adressefeltet - du havner på forsiden.
+ * brukeren admin. Rollen kom fra webappen ved innloggingen - appen
+ * bestemmer den aldri selv.
  *
  * Ligger i rot-Stacken (som new-task.tsx), altså utenfor tabs. Den kan
  * åpnes fra hvor som helst, og legger seg over tab-baren.
  */
 export default function AdminScreen() {
-  const { user, loginAs } = useAuth();
+  const { user, login } = useAuth();
   const { tasks, remove } = useTasks();
   const doneTasks = tasks.filter((task) => task.done);
+  const [error, setError] = useState("");
+
+  async function switchToUser() {
+    try {
+      setError("");
+      // 2 = Ola Hansen (user) i webappen - se login.tsx.
+      await login(2);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Kunne ikke logge inn");
+    }
+  }
 
   function deleteDoneTasks() {
     // remove() bruker setTasks(prev => ...), så flere kall på rad går fint.
@@ -36,7 +48,7 @@ export default function AdminScreen() {
     <Screen>
       <Card title="Kun for admin">
         <Text style={styles.text}>
-          Innlogget som {user?.firstName} {user?.lastName} ({user?.role}).
+          Innlogget som {user?.name} ({user?.role}).
         </Text>
         <Text style={styles.muted}>
           Vanlige brukere ser ikke lenken hit, og åpner de /admin direkte,
@@ -44,6 +56,7 @@ export default function AdminScreen() {
         </Text>
       </Card>
 
+      {/* Admin får ALLE oppgavene fra webappen, vanlige brukere bare sine egne. */}
       <Card title="Oppgaver">
         <Text style={styles.text}>
           {tasks.length} totalt, {doneTasks.length} fullført
@@ -58,10 +71,11 @@ export default function AdminScreen() {
 
       <Card title="Prøv beskyttelsen">
         <Text style={styles.muted}>
-          Bytt til en vanlig bruker mens du står her. Når den nye brukeren er
-          hentet, blir guard false, og du sendes ut av /admin automatisk.
+          Bytt til en vanlig bruker mens du står her. Når webappen har svart på
+          innloggingen, blir guard false, og du sendes ut av /admin automatisk.
         </Text>
-        <Button label="Bytt til vanlig bruker" onPress={() => loginAs("user")} />
+        <Button label="Bytt til vanlig bruker" onPress={switchToUser} />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
       </Card>
     </Screen>
   );
@@ -75,5 +89,9 @@ const styles = StyleSheet.create({
   muted: {
     fontSize: Theme.fontSize.sm,
     color: Theme.muted,
+  },
+  error: {
+    fontSize: Theme.fontSize.sm,
+    color: Theme.danger,
   },
 });

@@ -2,6 +2,7 @@ import { createContext, use, useState, type ReactNode } from "react";
 
 import { cached } from "@/api/cache";
 import { createTask, listTasks, type ApiTask } from "@/api/tasks";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Task } from "@/utils/task-schema";
 
 /**
@@ -13,6 +14,9 @@ import type { Task } from "@/utils/task-schema";
  * - addApi() LAGRER en ny oppgave i webappen, ved siden av add() som bare
  *   endrer lokal state.
  * - remove(), så detaljsiden kan slette.
+ * - Lista hører til en BRUKER. Webappen krever innlogging, og gir hver
+ *   bruker bare sine egne oppgaver (admin ser alle). Derfor leser
+ *   TasksProvider tokenet fra useAuth(), og ligger inni AuthProvider.
  *
  * I demoen var Context "kjekt å ha" - alt lå på én skjerm, så props hadde
  * holdt. Med navigasjon er den NØDVENDIG: lista, detaljsiden og "ny oppgave"-
@@ -51,12 +55,15 @@ function toTask(apiTask: ApiTask): Task {
 export const TASKS_KEY = "tasks";
 
 /** Henter lista og oversetter den til appens format. */
-async function loadTasks() {
-  const apiTasks = await listTasks();
+async function loadTasks(token: string) {
+  const apiTasks = await listTasks(token);
   return apiTasks.map(toTask);
 }
 
 export function TasksProvider({ children }: { children: ReactNode }) {
+  // null = ingen er innlogget (vi står på /login).
+  const { token } = useAuth();
+
   /**
    * HENTING MED use() - React 19
    *
@@ -70,15 +77,34 @@ export function TasksProvider({ children }: { children: ReactNode }) {
    * - Feilet det:  feilen kastes til nærmeste ErrorBoundary (_layout.tsx).
    *
    * cached(): use() trenger SAMME promise ved hver render (se api/cache.ts).
+   * Logger en annen bruker inn, tømmes cachen (AuthContext.tsx), og lista
+   * hentes på nytt med det nye tokenet.
+   *
+   * Uten token er det ingenting å hente. use() er ingen vanlig hook og kan
+   * stå i en betingelse (som i [id].tsx).
    */
-  const initialTasks = use(cached(TASKS_KEY, loadTasks));
+  const initialTasks = token
+    ? use(cached(TASKS_KEY, () => loadTasks(token)))
+    : [];
 
-  // Hit kommer vi bare når lista ER hentet. Den blir startverdien til vanlig
-  // state, så toggle/add/remove virker akkurat som før.
+  // Hit kommer vi bare når lista ER hentet (eller ingen er innlogget). Den
+  // blir startverdien til vanlig state, så toggle/add/remove virker som før.
   const [tasks, setTasks] = useState(initialTasks);
 
+  // NB: useState bruker startverdien bare ved FØRSTE render. Bytter du konto
+  // (eller logger ut), ville state ellers beholdt forrige brukers liste.
+  // Derfor husker vi hvilket token lista er for, og bytter den selv når
+  // tokenet endres. (React-dokumentasjonen: "Adjusting some state when a
+  // prop changes".)
+  const [tasksFor, setTasksFor] = useState(token);
+  if (tasksFor !== token) {
+    setTasksFor(token);
+    setTasks(initialTasks);
+  }
+
   // NB: toggle/add/remove endrer bare LOKAL state - API-et vet ingenting.
-  // Etter en refresh hentes lista på nytt, og endringene er borte.
+  // Etter en refresh (og ny innlogging) hentes lista på nytt, og endringene
+  // er borte.
   // addApi under er den som LAGRER (POST). PATCH/DELETE er neste steg.
 
   // Samme regler som i demoen: alltid ny array + nye objekter.
@@ -109,8 +135,12 @@ export function TasksProvider({ children }: { children: ReactNode }) {
    * setTasks kjøres aldri. Feilen går videre til kalleren (new-task.tsx).
    */
   async function addApi(task: Omit<Task, "id">) {
+    // "Ny oppgave" finnes bare for innloggede (Stack.Protected), men typen er
+    // string | null - så TypeScript krever sjekken.
+    if (!token) throw new Error("Du må være innlogget");
+
     // Oversett tilbake til API-ets språk: done -> completed.
-    const created = await createTask({
+    const created = await createTask(token, {
       title: task.title,
       completed: task.done,
     });

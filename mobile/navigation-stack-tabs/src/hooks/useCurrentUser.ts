@@ -1,71 +1,58 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { fetchCurrentUser, type AuthUser } from "@/api/auth";
+import { login as loginApi, type ApiUser } from "@/api/auth";
+import { clear } from "@/api/cache";
 
 /**
- * CUSTOM HOOK - innlogget bruker, hentet med fetchCurrentUser() fra api/auth.ts.
+ * CUSTOM HOOK - innlogget bruker: token + bruker i state, og login()/logout().
  *
  * En custom hook er bare en funksjon som starter med "use" og kaller andre
- * hooks. Her: samme useState + useEffect som i users/index.tsx, flyttet ut av
- * skjermen så flere skjermer kan bruke den.
+ * hooks. Her: de samme useState-ene og login/logout som i AuthProvider
+ * (contexts/AuthContext.tsx), flyttet ut så de kan gjenbrukes.
  *
- * DUPLIKAT MED VILJE: AuthProvider (contexts/AuthContext.tsx) gjør nesten
- * det samme. Forskjellen er HVOR staten bor:
+ * DUPLIKAT MED VILJE. Forskjellen er HVOR staten bor:
  *
  *   useCurrentUser()  Staten bor i komponenten som kaller hooken.
- *                     To skjermer = to kopier og to hentinger. Lukkes
- *                     skjermen, er brukeren borte - neste gang hentes den igjen.
+ *                     To skjermer = to kopier. Lukkes skjermen, er kopien
+ *                     borte.
  *
  *   useAuth()         Staten bor i AuthProvider, over navigatoren.
- *                     Én henting ved oppstart, delt av alle skjermer.
+ *                     Én kopi, delt av alle skjermer.
  *
- * Se i terminalen: "[auth] Henter ..." kommer hver gang du åpner
- * Innstillinger (som bruker denne hooken) - men ikke når du bytter tab.
- *
- * Og: bytter du konto på Profil (loginAs), oppdateres AuthProvider og alle
- * som bruker useAuth(). Denne hooken vet ingenting om det - den har sin egen
- * kopi. Derfor bruker RootNavigator useAuth() til Stack.Protected, ikke denne.
+ * Se Innstillinger, som kaller denne hooken selv: der er INGEN innlogget,
+ * selv om du er det på Profil. Skjermen får sin egen, tomme kopi - tokenet
+ * fra /login ligger i AuthProvider. Derfor bruker RootNavigator useAuth() til
+ * Stack.Protected, ikke denne.
  *
  * Det beste fra begge: kall hooken ÉN gang, inni en provider, og del
  * resultatet via context. Det er akkurat det contexts/AuthContextV2.tsx gjør.
  */
 export function useCurrentUser() {
-  // null = ikke hentet ennå.
-  const [user, setUser] = useState<AuthUser | null>(null);
+  // null = ingen er innlogget - i DENNE kopien.
+  const [user, setUser] = useState<ApiUser | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
-  // Kjører én gang når komponenten som bruker hooken, mountes.
-  useEffect(() => {
-    // fetchCurrentUser tar ikke imot et signal, så kallet kan ikke avbrytes.
-    // I stedet ignorerer vi svaret hvis skjermen er borte før det kommer.
-    let ignore = false;
-
-    fetchCurrentUser().then((result) => {
-      if (!ignore) setUser(result);
-    });
-
-    // Opprydding: kjøres når skjermen forsvinner.
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  /** Hent /me på nytt, men behold brukeren til svaret kommer. */
-  function refetch() {
-    fetchCurrentUser().then(setUser);
+  async function login(userId: number) {
+    const result = await loginApi(userId);
+    // Alt i cachen ble hentet med forrige token (se api/cache.ts).
+    clear();
+    setToken(result.token);
+    setUser(result.user);
   }
 
-  /** Tøm brukeren og hent på nytt - samme som skjer ved en refresh. */
-  function reload() {
+  function logout() {
+    clear();
+    setToken(null);
     setUser(null);
-    refetch();
   }
 
-  // Samme form som useAuth() (minus loginAs), så skjermene kan bytte mellom dem.
+  // Samme form som useAuth(), så AuthContextV2 kan dele den rett videre.
   return {
     user,
-    isLoading: user === null,
+    token,
+    role: user?.role,
     isAdmin: user?.role === "admin",
-    reload,
-    refetch,
+    login,
+    logout,
   };
 }

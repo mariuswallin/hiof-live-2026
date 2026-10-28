@@ -22,16 +22,20 @@ pnpm install
 pnpm start        # trykk i (iOS), a (Android) eller w (web)
 ```
 
+Webappen må kjøre (`npm run dev` i `hiof-live-2026/webapp/tasks`): appen logger inn og
+henter oppgavene der.
+
 **Vis**
 
-1. Klikk raskt gjennom appen: Hjem → Oppgaver → en oppgave → «Se hvem som eier den» →
+1. Klikk raskt gjennom appen: Logg inn som Ola → Hjem → Oppgaver → en oppgave → «Se hvem som eier den» →
    tilbake → Profil → Innstillinger → tilbake → Om appen → tilbake → Oppgaver → `+` →
    tilbake → Hjem → «Brukere» → en bruker.
 2. Vis treet – dette er kartet resten av gjennomgangen følger:
 
 ```
 Stack                      (src/app/_layout.tsx)
-├── Tabs                   (src/app/(tabs)/_layout.tsx)
+├── Logg inn (beskyttet)   /login      kun når ingen er innlogget
+├── Tabs                   (src/app/(tabs)/_layout.tsx)   resten: kun innlogget
 │   ├── Hjem               /
 │   ├── Oppgaver           → Stack (tasks/_layout.tsx)
 │   │     ├── liste         /tasks
@@ -439,7 +443,7 @@ const [tasks, setTasks] = useState(initialTasks);
 
    Ingen `isLoading`/`error` i contexten. Mens lista hentes, finnes ikke provideren ennå.
 8. `_layout.tsx`: `<Suspense fallback={… «Henter oppgaver …»}>` rundt `TasksProvider` –
-   *inni* `AuthProvider`, så bruker og oppgaver hentes samtidig. Feiler hentingen, viser
+   *inni* `AuthProvider`, fordi lista hentes med tokenet fra innloggingen (steg 11). Feiler hentingen, viser
    `ErrorBoundary`-eksporten «Noe gikk galt» + «Prøv igjen».
 9. `toTask`: API-et sier `todo`/`completed`/tall-id, appen sier `title`/`done`/streng-id.
    Oversett én gang – `TaskItem`, `TaskList` osv. trenger ikke endres.
@@ -608,7 +612,7 @@ useEffect(() => {
 **Prøv**
 
 - Web: skriv `http://localhost:8081/users/68` i adressefeltet. Ingen tab-bar, ingen tab
-  involvert.
+  involvert. (Siden lastes på nytt, så du må logge inn først – se steg 11.)
 - Trykk tilbake → lista (selv om du aldri åpnet den). Tilbake igjen → Hjem.
 - «Neste bruker» noen ganger, så tilbake → du går baklengs gjennom brukerne.
 - Lista → bruker → tilbake → samme bruker igjen: «Henter bruker …» hver gang (ingen
@@ -675,6 +679,9 @@ i rot-Stacken.
 (se tabellen under). Merk at «tilbake» fra `/tasks/3` og `/users/68` virker takket være
 `initialRouteName` (steg 8 og 9).
 
+NB: Alt unntatt `/login` krever innlogging (steg 11). På web laster adressefeltet hele
+siden på nytt, tokenet i minnet er borte, og du havner på `/login`.
+
 **Spørsmål**
 
 **Hvordan åpner jeg en dyplenke?**
@@ -696,72 +703,83 @@ for å se `+not-found`. Fysisk telefon: bruk IP-en Metro viser i terminalen.
 
 ---
 
-## Steg 11 – Innlogget bruker i context (`AuthProvider`)
+## Steg 11 – Innlogging mot webappen i context (`AuthProvider`)
 
-**Mål:** Forstå hvor lenge data i context «lever» – og hvorfor brukeren må hentes på
-nytt ved hver oppstart.
+**Mål:** Logge inn mot webappen, sende tokenet med på alle kall, og forstå hvor lenge
+innloggingen «lever» i context.
 
-**Filer:** `src/contexts/AuthContext.tsx`, `src/api/auth.ts`, `src/app/_layout.tsx`,
-`(tabs)/profile.tsx`, `(tabs)/index.tsx`, `src/hooks/useCurrentUser.ts`, `src/app/settings.tsx`,
-`src/contexts/AuthContextV2.tsx`
+**Filer:** `src/api/auth.ts`, `src/api/tasks.ts`, `src/api/cache.ts`,
+`src/contexts/AuthContext.tsx`, `src/contexts/TasksContext.tsx`, `src/app/login.tsx`,
+`src/app/_layout.tsx`, `(tabs)/profile.tsx`, `(tabs)/index.tsx`,
+`src/hooks/useCurrentUser.ts`, `src/app/settings.tsx`, `src/contexts/AuthContextV2.tsx`
 
 **Vis**
 
-1. `api/auth.ts`: `fetchCurrentUser()` later som den er `GET /me` – venter 800 ms og
-   returnerer en fast bruker (validert med zod). Logger `[auth] Henter innlogget bruker`.
-2. `AuthContext.tsx`: samme Provider + hook som `TasksContext` – men henter på den
-   «gamle» måten (som `users/`): `useState(null)` + `useEffect(..., [])`. Gå gjennom livsløpet i kommentaren øverst:
-   oppstart → `null` → hent → `setUser` → navigering (ingen ny henting) → refresh → start
-   på nytt.
-3. `_layout.tsx`: `AuthProvider` ligger over navigatoren (og over `TasksProvider`), så
-   den mountes én gang og aldri på nytt ved navigering.
-4. `_layout.tsx` → `RootNavigator`: mens `isLoading` er `true` vises bare «Henter bruker …».
-   Appen vises først når vi vet hvem brukeren er (viktig for rollen i neste steg).
-5. `profile.tsx` og `index.tsx`: begge leser `useAuth()`, ingen henter selv.
-6. `hooks/useCurrentUser.ts`: samme `useState` + `useEffect` rundt `fetchCurrentUser()`,
-   men som **custom hook** i stedet for provider. Duplikat med vilje. `settings.tsx`
-   bruker den. Forskjellen: staten bor i skjermen, ikke over navigatoren.
-7. `contexts/AuthContextV2.tsx`: ny versjon av `AuthContext.tsx` (som står urørt). Samme
-   `AuthProvider` + `useAuth()`, men provideren kaller bare `useCurrentUser()` og deler
-   svaret. Hook = *hvordan* vi henter, context = *hvem* som får det.
+1. Webappen krever innlogging: alle `/api/v1/tasks`-ruter svarer 401 uten bruker, og en
+   vanlig bruker får bare sine egne oppgaver (admin ser alle).
+2. `api/auth.ts`: `login(userId)` → `POST /api/v1/login` → `{ token, user }`, validert med
+   zod. Rollen kommer fra webappen. Jukseauth: ingen passord, tokenet er bare id-en.
+3. `api/tasks.ts`: hver funksjon tar `token` først og sender
+   `authorization: Bearer <token>` – mobilens versjon av cookien.
+4. `AuthContext.tsx`: `token` + `user` i `useState`, `login(userId)` og `logout()`. Gå
+   gjennom livsløpet i kommentaren øverst: oppstart → `null` → `/login` → `login()` →
+   navigering (ingen ny innlogging) → refresh → logget ut.
+5. `_layout.tsx`: `<Stack.Protected guard={!isLoggedIn}>` rundt `login`,
+   `guard={isLoggedIn}` rundt resten. Ingen `router.replace` – når `user` settes eller
+   fjernes, bytter Stack.Protected skjerm selv.
+6. `TasksContext.tsx`: leser `token` fra `useAuth()`. `use()` bare når noen er innlogget.
+   Ny bruker → `login()` tømmer cachen (`clear()` i `api/cache.ts`), og `tasksFor` bytter
+   lista i state (startverdien til `useState` brukes bare én gang).
+7. `profile.tsx`: «Logg ut», og «Bytt konto» = logg inn som den andre webapp-brukeren.
+8. `hooks/useCurrentUser.ts`: samme `useState` + `login`/`logout` som `AuthProvider`, men
+   som **custom hook**. Duplikat med vilje. `settings.tsx` kaller den selv – og der er
+   *ingen* innlogget. Staten bor i skjermen, ikke over navigatoren.
+9. `contexts/AuthContextV2.tsx`: provideren kaller bare `useCurrentUser()` og deler svaret.
+   Hook = *hvordan*, context = *hvem* som får det.
 
 **Prøv**
 
-- Start appen med konsollen åpen: `[auth] Henter …` kommer **én** gang.
-- Bytt tab, åpne en oppgave, åpne «Ny oppgave»: ingen ny logglinje.
-- Refresh (F5 på web, «r» i Metro): brukeren er borte et øyeblikk, ny logglinje.
-- «Hent bruker på nytt» på Profil: samme flyt, uten å refreshe hele appen.
-- Profil → Innstillinger: «Henter bruker …» og ny logglinje. Tilbake og inn igjen: ny
-  henting igjen – custom hooken har ingen delt state.
-- Logg inn som admin på Profil → Innstillinger viser `admin` (ny henting). Men
-  `useAuth()` visste det allerede, uten å hente.
-- Bytt til V2: endre `"@/contexts/AuthContext"` til `"@/contexts/AuthContextV2"` i
-  `_layout.tsx`, `(tabs)/index.tsx`, `(tabs)/profile.tsx` og `admin.tsx`. Appen oppfører
-  seg likt. Glem én fil → `useAuth må brukes inne i <AuthProvider>` – to contexter kan
-  ikke blandes.
+- Start appen: bare «Logg inn». Logg inn som Ola → Hjem, med Olas oppgaver.
+- Bytt tab, åpne en oppgave, åpne «Ny oppgave»: fortsatt innlogget, ingen ny innlogging.
+- Refresh (F5 på web, «r» i Metro): tilbake på «Logg inn» – tokenet lå bare i minnet.
+- «Logg ut» på Profil: samme flyt, uten å refreshe hele appen.
+- Profil → Innstillinger: «Ingen innlogget» – custom hooken har sin egen, tomme state.
+- Bytt konto til Kari → Oppgaver viser alle oppgavene. Tilbake til Ola → bare hans igjen.
+- Fjern `clear()` i `login()` → bytt fra Ola til Kari: hun får *Olas* liste fra cachen.
+- Stopp webappen og logg inn → feilmeldingen vises på «Logg inn».
+- Bytt til V2: endre `"@/contexts/AuthContext"` til `"@/contexts/AuthContextV2"` i alle
+  filene som importerer den (søk). Appen oppfører seg likt. Glem én fil →
+  `useAuth må brukes inne i <AuthProvider>` – to contexter kan ikke blandes.
 
 **Spørsmål**
 
-**Hvorfor ikke lagre brukeren i AsyncStorage så vi slipper å hente?**
-Det man lagrer er en *token* (f.eks. `expo-secure-store`), ikke brukeren. Brukerdata kan
-ha endret seg på serveren (navn, rolle, sperret konto). API-et er sannheten – context er
-bare en kopi mens appen kjører.
+**Hvorfor må jeg logge inn igjen etter en refresh?**
+Tokenet ligger bare i React-state, altså i JS-minnet. Skal det huskes: lagre *tokenet* i
+`expo-secure-store` (kryptert), ikke i AsyncStorage (ukryptert), og hent brukeren fra API-et
+ved oppstart. Brukeren lagrer man ikke – navn og rolle kan ha endret seg på serveren.
 
-**Hvorfor `null` og ikke en tom bruker `{}`?**
-`null` sier tydelig «vet ikke ennå». Da tvinger TypeScript skjermene til å håndtere
-laster-tilstanden (`if (!user)`), i stedet for å vise tomme felter.
+**Hvorfor `clear()` på cachen – holder det ikke å ta med tokenet i nøkkelen?**
+Med tokenet i nøkkelen (som `queryKey` i steg 6) ser du aldri *en annen* brukers liste.
+Men bytter du tilbake, ligger din *gamle* liste fortsatt i cachen. Å tømme den ved hver
+innlogging og utlogging løser begge.
+
+**Hvorfor `tasksFor` i `TasksContext`?**
+`useState(initialTasks)` bruker startverdien bare ved første render. Uten `tasksFor` ville
+state beholdt forrige brukers liste selv om `use()` ga en ny.
 
 **Custom hook eller context?**
 En custom hook gjenbruker *logikk*: hver komponent som kaller `useCurrentUser()` får sin
-egen `user` og sin egen henting. En context deler *state*: én henting, samme verdi overalt,
-og `loginAs` oppdaterer alle med en gang. Derfor leser `Stack.Protected` rollen fra
-`useAuth()`. Ofte kombinerer man dem: `useAuth()` *er* en custom hook – den leser bare fra
-context i stedet for å ha egen state.
+egen `user` og sitt eget token. En context deler *state*: én innlogging, samme verdi
+overalt, og `login()` oppdaterer alle med en gang. Derfor leser `Stack.Protected` fra
+`useAuth()`. `useAuth()` *er* også en custom hook – den leser bare fra context.
 
-**Hva med utlogging og innloggingsskjerm?**
-Utlogging = slett token + `setUser(null)`. En innloggingsskjerm løses med samme verktøy som
-i neste steg: `<Stack.Protected guard={!user}>` rundt `login` og `guard={!!user}` rundt
-resten. Ikke med her – fokus er at brukeren hentes og deles via context.
+**Er dette trygt?**
+Nei, med vilje. Ingen passord, og tokenet er bare bruker-id-en – endrer noen det, er de en
+annen bruker. Ekte app: e-post + passord inn, et signert eller tilfeldig token ut.
+
+**Hvorfor havner jeg på «Logg inn» etter «Prøv igjen»?**
+`AuthProvider` ligger inni `ErrorBoundary`-en i `_layout.tsx`. `retry()` lager den på nytt,
+og tokenet er borte – som etter en refresh.
 
 ---
 
@@ -774,11 +792,11 @@ resten. Ikke med her – fokus er at brukeren hentes og deles via context.
 
 **Vis**
 
-1. `api/auth.ts`: `role: z.enum(["admin", "user"])` på brukeren. To kontoer, og
-   `simulateLogin(role)` som later som vi logger inn med en annen.
+1. `api/auth.ts`: `role: z.enum(["admin", "user"])` på brukeren fra webappen. Kari (id 1)
+   er admin, Ola (id 2) er vanlig bruker.
 2. `AuthContext.tsx`: `isAdmin = user?.role === "admin"` – avledet, ikke egen state.
-   `loginAs(role)` henter `/me` på nytt.
-3. `_layout.tsx`:
+   Kontobytte er bare `login(annenId)`.
+3. `_layout.tsx`, inni `guard={isLoggedIn}`:
 
 ```tsx
 <Stack.Protected guard={isAdmin}>
@@ -795,24 +813,25 @@ resten. Ikke med her – fokus er at brukeren hentes og deles via context.
 
 **Prøv**
 
-- Som Ola: ingen admin-lenke på Hjem. Skriv `/admin` i adressefeltet → du havner på `/`.
-- Profil → «Logg inn som admin» → Hjem → «Åpne admin-panelet» → `/admin`.
-- «Bytt til vanlig bruker» på admin-siden → kastes ut til `/`.
-- Refresh mens du er admin → tilbake til Ola (den simulerte «tokenen» lå bare i minnet).
+- Som Ola: ingen admin-lenke på Hjem.
+- Profil → «Logg inn som Kari Nordmann (admin)» → Hjem → «Åpne admin-panelet» → `/admin`.
+- «Bytt til vanlig bruker» på admin-siden → kastes ut til `/` når webappen har svart.
+- Refresh mens du er admin → «Logg inn» igjen (tokenet lå bare i minnet).
 
 **Spørsmål**
 
 **Er appen nå sikker?**
-Nei. `Stack.Protected` skjuler bare skjermen i appen. Koden og dataene kan fortsatt nås.
-API-et må selv sjekke rollen på hver forespørsel (403 hvis ikke admin).
+`Stack.Protected` skjuler bare skjermen i appen. Det er webappen som beskytter dataene: den
+sjekker tokenet på hver forespørsel (401), og `DELETE /api/v1/tasks/:id` svarer 403 for
+alle som ikke er admin.
 
 **Hvorfor holder det ikke å skjule lenken?**
 URL-er kan skrives inn eller komme som dyplenker. Uten `Stack.Protected` åpnes skjermen
 uansett hvordan man kom dit.
 
-**Hvorfor viser `_layout.tsx` «Henter bruker …» før appen?**
-Før `/me` har svart er `isAdmin` `false`. Viste vi navigatoren da, ville en admin som
-refresher på `/admin` bli kastet ut før svaret kom.
+**Hvorfor kommer rollen fra webappen?**
+Appen kan endres av brukeren (og koden kan leses). Bestemte appen rollen selv, kunne hvem
+som helst gjort seg til admin. Webappen er sannheten.
 
 **Hvorfor ligger `/admin` i rot-Stacken og ikke i tabs?**
 Da er den tilgjengelig fra hele appen og legger seg over tab-baren. Skal den være en egen
@@ -835,7 +854,7 @@ ankerskjermen, her `/`.
 | `TaskList` med `TaskRegister` inni, `.map`  | `TaskList` med `FlatList`, `TaskRegister` på egen skjerm |
 | `TaskLayout` tegner header                  | Navigatoren tegner header og tab-bar                  |
 | `useState(TASKS)` – lokal konstant          | `use()` + Suspense – lista hentes fra API              |
-| Ingen bruker                                | Innlogget bruker med rolle i `AuthContext`             |
+| Ingen bruker                                | Innlogging mot webappen (token + rolle) i `AuthContext` |
 | Ingen tilgangsstyring                       | `/admin` beskyttet med `Stack.Protected`               |
 
 ### Forskjeller fra `mobile/navigation`

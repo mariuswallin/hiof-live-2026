@@ -15,6 +15,7 @@ import { Card } from "@/components/shared/Card";
 import { Empty } from "@/components/shared/Empty";
 import { Screen } from "@/components/shared/Screen";
 import { Theme } from "@/constants/theme";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTasks } from "@/contexts/TasksContext";
 
 /** Nøkkelen for én oppgave i cachen (api/cache.ts). */
@@ -41,6 +42,8 @@ export default function TaskDetailScreen() {
   // Ingen isLoading: TasksProvider har lista FØR noen skjerm rendres
   // (use() + Suspense i _layout.tsx).
   const { tasks, toggle, remove } = useTasks();
+  // Webappen vil vite hvem som spør (se api/tasks.ts).
+  const { token } = useAuth();
 
   // Vi får bare id-en via navigasjonen - selve oppgaven slår vi opp selv.
   // Da er detaljsiden alltid oppdatert, og URL-en er alt som trengs for å
@@ -61,6 +64,10 @@ export default function TaskDetailScreen() {
     );
   }
 
+  // Stack.Protected viser bare skjermen for innloggede, men typen tillater
+  // null - så TypeScript krever sjekken.
+  if (!token) return null;
+
   /**
    * use() ETTER en if/return - det går ikke med vanlige hooks (useState,
    * useEffect ...), men use() er unntaket. Finnes ikke oppgaven lokalt,
@@ -69,12 +76,14 @@ export default function TaskDetailScreen() {
    * cached(): samme id = samme promise. Gå tilbake og inn igjen på samme
    * oppgave: svaret ligger klart, og ingen laster-skjerm vises.
    * (users/[userId].tsx har ingen cache - der hentes alt på nytt.)
+   * Bytter du konto, tømmes cachen (AuthContext.tsx) og oppgaven hentes på
+   * nytt med det nye tokenet.
    *
    * Prøv: bytt addApi med add i new-task.tsx, lag en oppgave og åpne den.
    * id-en (Date.now()) finnes ikke i webappen, så du får 404 - og ser
    * ErrorBoundary. Med addApi kom id-en FRA webappen, og den finnes.
    */
-  const apiTask = use(cached(taskKey(task.id), () => getTask(task.id)));
+  const apiTask = use(cached(taskKey(task.id), () => getTask(token, task.id)));
 
   const handleDelete = () => {
     remove(task.id);

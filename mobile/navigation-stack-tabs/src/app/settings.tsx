@@ -2,7 +2,6 @@ import { useState } from "react";
 import { StyleSheet, Switch, Text, View } from "react-native";
 
 import { Card } from "@/components/shared/Card";
-import { Loading } from "@/components/shared/Loading";
 import { Screen } from "@/components/shared/Screen";
 import { Theme } from "@/constants/theme";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -14,8 +13,12 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
  * header vises - med tilbake-knapp, fordi det finnes noe under.
  *
  * Brukeren kommer fra en CUSTOM HOOK (useCurrentUser), ikke fra
- * AuthContext. Skjermen fjernes når du går tilbake, så hver gang du åpner
- * den, hentes brukeren på nytt. Sammenlign med Profil, som bruker useAuth().
+ * AuthContext. Hooken gir skjermen sin EGEN state - og der har ingen logget
+ * inn. Innloggingen fra /login ligger i AuthProvider. Sammenlign med Profil,
+ * som bruker useAuth().
+ *
+ * Prøv: bytt useCurrentUser() med useAuth() (fra "@/contexts/AuthContext"),
+ * så ser du brukeren her også.
  */
 export default function SettingsScreen() {
   const [notifications, setNotifications] = useState(true);
@@ -26,10 +29,13 @@ export default function SettingsScreen() {
       <Card title="Konto (custom hook)">
         {user ? (
           <Text style={styles.text}>
-            {user.firstName} {user.lastName} ({user.role})
+            {user.name} ({user.role})
           </Text>
         ) : (
-          <Loading label="Henter bruker ..." />
+          <Text style={styles.muted}>
+            Ingen innlogget - i denne skjermens egen kopi. Profil leser
+            innloggingen fra AuthProvider og ser den.
+          </Text>
         )}
       </Card>
 
@@ -52,5 +58,9 @@ const styles = StyleSheet.create({
   text: {
     fontSize: Theme.fontSize.md,
     color: Theme.text,
+  },
+  muted: {
+    fontSize: Theme.fontSize.md,
+    color: Theme.muted,
   },
 });

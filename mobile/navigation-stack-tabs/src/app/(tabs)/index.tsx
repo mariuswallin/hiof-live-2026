@@ -21,8 +21,8 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      {/* Rot-_layout.tsx venter på brukeren, men typen tillater null. */}
-      <Card title={user ? `Hei, ${user.firstName}!` : "Hei!"}>
+      {/* Bare innloggede ser Hjem (Stack.Protected), men typen tillater null. */}
+      <Card title={user ? `Hei, ${user.name}!` : "Hei!"}>
         <Text style={styles.muted}>
           {user?.email} · {user?.role}
         </Text>

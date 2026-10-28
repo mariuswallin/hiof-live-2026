@@ -1,5 +1,6 @@
 import { Image } from "expo-image";
 import { Link } from "expo-router";
+import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/shared/Button";
@@ -16,40 +17,66 @@ import { useAuth } from "@/contexts/AuthContext";
  * Bytt tab og kom tilbake: brukeren er der med en gang, uten ny henting.
  */
 export default function ProfileScreen() {
-  const { user, isAdmin, reload, loginAs } = useAuth();
+  const { user, isAdmin, login, logout } = useAuth();
+  const [error, setError] = useState("");
 
-  // Rot-_layout.tsx viser ikke appen før brukeren er hentet, så her finnes
-  // den alltid. Men typen er AuthUser | null, så TypeScript krever sjekken.
+  // Kontobytte = logg inn som den ANDRE brukeren i webappen.
+  // 1 = Kari Nordmann (admin), 2 = Ola Hansen (user) - se login.tsx.
+  async function switchAccount() {
+    try {
+      setError("");
+      await login(isAdmin ? 2 : 1);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Kunne ikke logge inn");
+    }
+  }
+
+  // Stack.Protected i rot-_layout.tsx viser bare appen når noen er innlogget,
+  // så her finnes brukeren alltid. Men typen er User | null, så TypeScript
+  // krever sjekken.
   if (!user) return null;
 
   return (
     <Screen>
-      <Card title={`${user.firstName} ${user.lastName}`}>
+      <Card title={user.name}>
         <View style={styles.row}>
-          <Image source={user.image} style={styles.avatar} />
+          {/*
+            Webappen har ikke profilbilder. dummyjson lager et ikon av hvilken
+            som helst tekst - her navnet.
+          */}
+          <Image
+            source={`https://dummyjson.com/icon/${encodeURIComponent(user.name)}/128`}
+            style={styles.avatar}
+          />
           <View style={styles.info}>
             <Text style={styles.muted}>{user.email}</Text>
-            {/* Rollen kom fra API-et sammen med resten av brukeren. */}
+            {/* Rollen kom fra webappen sammen med resten av brukeren. */}
             <Text style={styles.muted}>Rolle: {user.role}</Text>
           </View>
         </View>
 
         {/*
-          Simulerer en refresh: user settes til null og hentes på nytt.
-          Sammenlign med en ekte refresh (F5 / "r" i Metro) - samme flyt.
+          Glemmer tokenet: user blir null, og Stack.Protected sender deg til
+          /login. Samme som skjer ved en refresh (F5 / "r" i Metro).
         */}
-        <Button label="Hent bruker på nytt" onPress={reload} />
+        <Button label="Logg ut" onPress={logout} />
       </Card>
 
-      <Card title="Bytt konto (simulert innlogging)">
+      <Card title="Bytt konto">
         <Text style={styles.muted}>
-          Som admin dukker det opp en lenke til /admin på Hjem. Som vanlig
-          bruker finnes ikke ruten i det hele tatt.
+          Som admin dukker det opp en lenke til /admin på Hjem, og du ser alle
+          oppgavene. Som vanlig bruker ser du bare dine egne, og /admin finnes
+          ikke i det hele tatt.
         </Text>
         <Button
-          label={isAdmin ? "Logg inn som vanlig bruker" : "Logg inn som admin"}
-          onPress={() => loginAs(isAdmin ? "user" : "admin")}
+          label={
+            isAdmin
+              ? "Logg inn som Ola Hansen (user)"
+              : "Logg inn som Kari Nordmann (admin)"
+          }
+          onPress={switchAccount}
         />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
       </Card>
 
       {/*
@@ -87,6 +114,10 @@ const styles = StyleSheet.create({
   muted: {
     fontSize: Theme.fontSize.md,
     color: Theme.muted,
+  },
+  error: {
+    fontSize: Theme.fontSize.md,
+    color: Theme.danger,
   },
   link: {
     fontSize: Theme.fontSize.md,
