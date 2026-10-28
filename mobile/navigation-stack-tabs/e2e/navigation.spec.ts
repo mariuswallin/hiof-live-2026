@@ -3,20 +3,26 @@ import { expect, test, type Page } from "@playwright/test";
 /**
  * E2E: en hel navigasjonsflyt, slik en bruker ville gjort det.
  *
- *   Hjem -> Oppgaver-taben -> detaljside (/tasks/3) -> tilbake til lista
+ *   /login -> Hjem -> Oppgaver-taben -> detaljside (/tasks/3) -> tilbake
  *
- * API-ene MOCKES - både webappen vår (oppgaver) og dummyjson.com (brukere).
- * Da er testen:
+ * API-ene MOCKES - både webappen vår (innlogging og oppgaver) og
+ * dummyjson.com (brukere). Da er testen:
  * - rask og stabil (ikke avhengig av nettet eller at webappen kjører)
  * - forutsigbar (vi bestemmer selv hva API-et svarer)
+ *
+ * NB: tokenet ligger bare i minnet. page.goto() laster siden på nytt, og da
+ * er du logget ut. Etter innloggingen navigerer testene derfor med klikk.
  */
 
 /** Falske svar - samme form som API-ene, så zod-valideringen går gjennom. */
 
-/** Adressen api/tasks.ts bruker. */
+/** Adressen api/tasks.ts og api/auth.ts bruker. */
 const TASKS_API = "http://localhost:5173/api/v1";
 
-/** Lista TasksContext henter ved oppstart (GET /api/v1/tasks). */
+/** Brukeren webappen svarer med på POST /api/v1/login. Token = id-en. */
+const OLA = { id: 2, name: "Ola Hansen", email: "ola@example.com", role: "user" };
+
+/** Lista TasksContext henter etter innloggingen (GET /api/v1/tasks). */
 const MOCK_TASKS = [
   { id: "1", title: "Lese om props", completed: true },
   { id: "3", title: "Prøve FlatList", completed: false },
@@ -38,6 +44,15 @@ const MOCK_NEXT_USER = {
   image: "https://dummyjson.com/icon/neste/128",
 };
 
+/** Som requireUser i webappen: uten riktig token -> 401. */
+const UNAUTHORIZED = {
+  status: 401,
+  json: {
+    ok: false,
+    error: { code: "401", message: "Du må være innlogget", fieldErrors: {} },
+  },
+};
+
 /**
  * page.route fanger ALLE forespørsler som matcher mønsteret, før de går ut
  * på nettet. route.fulfill svarer i stedet for serveren.
@@ -47,6 +62,19 @@ async function mockApi(page: Page) {
   await page.route(`${TASKS_API}/**`, (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
+
+    // Innloggingen: som apiLogin i auth-routes.ts.
+    if (path === "/api/v1/login") {
+      return route.fulfill({
+        json: { ok: true, data: { token: "2", user: OLA } },
+      });
+    }
+
+    // Alle /tasks-ruter krever tokenet. Glemmer appen det, svarer vi som
+    // webappen - og testen feiler.
+    if (request.headers().authorization !== "Bearer 2") {
+      return route.fulfill(UNAUTHORIZED);
+    }
 
     if (path === "/api/v1/tasks" && request.method() === "POST") {
       // Svar som webappen: 201 + oppgaven, med en id SERVEREN har laget.
@@ -80,11 +108,18 @@ async function mockApi(page: Page) {
   });
 }
 
+/** Åpne appen og logg inn som Ola. Ender på Hjem. */
+async function login(page: Page) {
+  await page.goto("/");
+  await page.getByText("Ola Hansen (user)").click();
+  await expect(page.getByText("Hei, Ola Hansen!")).toBeVisible();
+}
+
 test("navigerer fra lista til detaljsiden og tilbake", async ({ page }) => {
   await mockApi(page);
 
-  // 1. Start på Hjem ("/") og bytt til Oppgaver-taben.
-  await page.goto("/");
+  // 1. Logg inn (havner på Hjem, "/") og bytt til Oppgaver-taben.
+  await login(page);
   await page.getByRole("tab", { name: /Oppgaver/ }).click();
   await expect(page).toHaveURL(/\/tasks$/);
 
@@ -101,23 +136,14 @@ test("navigerer fra lista til detaljsiden og tilbake", async ({ page }) => {
   await expect(page.getByText("Prøve FlatList")).toBeVisible();
 });
 
-test("eier-skjermen henter brukeren fra dummyjson", async ({ page }) => {
-  await mockApi(page);
-
-  // Ingen lenke hit fra detaljsiden ennå - webappen sender ikke userId.
-  // Men ruten virker: åpne den direkte, så henter getUser() bruker 68.
-  await page.goto("/tasks/user/68");
-  await expect(page.getByText("test@example.com")).toBeVisible();
-  await expect(page.getByText("userId: 68")).toBeVisible();
-});
-
 test("ny oppgave legges oppå tabs og går tilbake etter lagring", async ({
   page,
 }) => {
   await mockApi(page);
 
   // 1. Fra lista: + i headeren åpner skjemaet.
-  await page.goto("/tasks");
+  await login(page);
+  await page.getByRole("tab", { name: /Oppgaver/ }).click();
   await page.getByLabel("Ny oppgave").click();
   await expect(page).toHaveURL(/\/new-task$/);
 
@@ -132,10 +158,13 @@ test("ny oppgave legges oppå tabs og går tilbake etter lagring", async ({
       request.url() === `${TASKS_API}/tasks` && request.method() === "POST",
   );
   await page.getByText("Register Task").click();
-  expect((await postRequest).postDataJSON()).toEqual({
+  const request = await postRequest;
+  expect(request.postDataJSON()).toEqual({
     title: "Lære Stack",
     completed: false,
   });
+  // Tokenet fra innloggingen - det er slik webappen vet hvem som eier oppgaven.
+  expect(request.headers().authorization).toBe("Bearer 2");
 
   // 4. 201 -> router.back() -> tilbake på lista, med oppgaven fra svaret.
   await expect(page).toHaveURL(/\/tasks$/);
@@ -162,8 +191,12 @@ test("ny oppgave blir stående med feilen når webappen svarer 400", async ({
     });
   });
 
+  // "Ny oppgave"-knappen på Hjem (router.push).
+  await login(page);
+  await page.getByText("Ny oppgave", { exact: true }).click();
+  await expect(page).toHaveURL(/\/new-task$/);
+
   // Appen sjekker bare "minst 3 tegn" - maks 200 er det webappen som passer på.
-  await page.goto("/new-task");
   await page.getByPlaceholder("Enter task name").fill("x".repeat(201));
   await page.getByText("Register Task").click();
 
@@ -175,10 +208,10 @@ test("ny oppgave blir stående med feilen når webappen svarer 400", async ({
 test("dynamisk rute utenfor tabs kan åpnes direkte", async ({ page }) => {
   await mockApi(page);
 
-  // 1. Rett på /users/68 - uten å gå via noen tab.
-  //    (Lista ligger allerede under i DOM-en, så vi sjekker tekst som bare
-  //    finnes på brukersiden.)
-  await page.goto("/users/68");
+  // 1. Rett på /users/68 med lenken på Hjem - uten å gå via lista.
+  await login(page);
+  await page.getByText("Åpne bruker 68 direkte →").click();
+  await expect(page).toHaveURL(/\/users\/68$/);
   await expect(page.getByText("Neste bruker (69) →")).toBeVisible();
   // users/ ligger i rot-Stacken, UTENFOR tabs -> ingen tab-bar.
   await expect(page.getByRole("tab", { name: /Hjem/ })).toHaveCount(0);
@@ -188,18 +221,18 @@ test("dynamisk rute utenfor tabs kan åpnes direkte", async ({ page }) => {
   await expect(page).toHaveURL(/\/users\/69$/);
   await expect(page.getByText("Neste bruker (70) →")).toBeVisible();
 
-  // 3. Tilbake-knappen i headeren (på web en lenke med forrige tittel):
-  //    først til 68, så til lista - som initialRouteName i
-  //    users/_layout.tsx la under, selv om vi aldri åpnet den.
+  // 3. Tilbake-knappen i headeren (på web en lenke med forrige tittel).
   await page.getByRole("link", { name: "Test Testesen, back" }).click();
   await expect(page).toHaveURL(/\/users\/68$/);
-  await page.getByRole("link", { name: "Brukere, back" }).click();
-  // Lista som initialRouteName la under, arver parameterne fra lenken:
-  // /users?userId=68. Ufarlig - lista bryr seg ikke om userId.
-  await expect(page).toHaveURL(/\/users(\?userId=68)?$/);
-  await expect(page.getByText("Neste Nordmann")).toBeVisible();
 
-  // 4. Fra lista inn på en bruker igjen.
+  // 4. Tilbake til Hjem, og inn via lista denne gangen.
+  //    NB: en EKTE dyplenke (adressefeltet) kan ikke testes her lenger -
+  //    page.goto laster siden på nytt, og da er tokenet borte.
+  await page.goBack();
+  await expect(page.getByText("Hei, Ola Hansen!")).toBeVisible();
+  await page.getByText("Brukere (utenfor tabs) →").click();
+  await expect(page).toHaveURL(/\/users$/);
+  await expect(page.getByText("Neste Nordmann")).toBeVisible();
   await page.getByText("Test Testesen").click();
   await expect(page).toHaveURL(/\/users\/68$/);
 });
@@ -207,19 +240,14 @@ test("dynamisk rute utenfor tabs kan åpnes direkte", async ({ page }) => {
 test("viser feilmelding når API-et feiler", async ({ page }) => {
   // Lista går bra, men enkelt-oppgaven (use() i [id].tsx) svarer 500.
   // Feilen havner i ErrorBoundary-eksporten i [id].tsx.
-  await page.route(`${TASKS_API}/**`, (route) => {
-    const path = new URL(route.request().url()).pathname;
-
-    if (path === "/api/v1/tasks") {
-      return route.fulfill({ json: { ok: true, data: MOCK_TASKS } });
-    }
-    return route.fulfill({ status: 500, json: { ok: false } });
-  });
-  await page.route("https://dummyjson.com/**", (route) =>
-    route.fulfill({ status: 204 }),
+  await mockApi(page);
+  await page.route(`${TASKS_API}/tasks/3`, (route) =>
+    route.fulfill({ status: 500, json: { ok: false } }),
   );
 
-  await page.goto("/tasks/3");
+  await login(page);
+  await page.getByText("Åpne oppgave 3 direkte →").click();
+  await expect(page).toHaveURL(/\/tasks\/3$/);
 
   // exact: i dev viser LogBox også feilen i en toast nederst - den har mer
   // tekst rundt, så exact treffer bare meldingen i ErrorBoundary.
@@ -230,16 +258,16 @@ test("viser feilmelding når API-et feiler", async ({ page }) => {
 });
 
 test("viser feilmelding når lista ikke kan hentes", async ({ page }) => {
-  // Webappen svarer 500 på GET /api/v1/tasks i TasksContext. use() kaster,
-  // og feilen havner i ErrorBoundary-eksporten i rot-_layout.tsx.
-  await page.route(`${TASKS_API}/**`, (route) =>
+  // Innloggingen går bra, men webappen svarer 500 på GET /api/v1/tasks i
+  // TasksContext. use() kaster, og feilen havner i ErrorBoundary-eksporten i
+  // rot-_layout.tsx.
+  await mockApi(page);
+  await page.route(`${TASKS_API}/tasks`, (route) =>
     route.fulfill({ status: 500, json: { ok: false } }),
   );
-  await page.route("https://dummyjson.com/**", (route) =>
-    route.fulfill({ status: 204 }),
-  );
 
-  await page.goto("/tasks");
+  await page.goto("/");
+  await page.getByText("Ola Hansen (user)").click();
 
   await expect(page.getByText("Noe gikk galt")).toBeVisible();
   await expect(
