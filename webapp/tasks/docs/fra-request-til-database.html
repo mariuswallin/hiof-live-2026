@@ -1,0 +1,2643 @@
+<!doctype html>
+<html lang="nb">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Fra request til database</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,500..800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+  <style>
+    /* Layout: lagstripe øverst som kart, steg-for-steg-spiller, deretter ett kapittel per lag i tavlens fargekoder */
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --fg: #121519;
+      --muted: #454d5a;
+      --line: #cfd5de;
+      --code: #eef1f5;
+      --repo: #ad2219;
+      --repo-s: #fdeceb;
+      --svc: #1452a0;
+      --svc-s: #e8f0fb;
+      --ctrl: #5530c4;
+      --ctrl-s: #efeafd;
+      --route: #262c34;
+      --route-s: #e9ecf0;
+      --ui: #1b6f31;
+      --ui-s: #e5f4e9;
+      --dom: #0b6464;
+      --dom-s: #e1f3f3;
+      --db: #5a4a3a;
+      --db-s: #f1ece6;
+      --kw: #8a1f6b;
+      --str: #1b6f31;
+      --com: #5d6573;
+      --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+      --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #0e1115;
+        --surface: #161a20;
+        --fg: #eceff3;
+        --muted: #b1b8c4;
+        --line: #2e353f;
+        --code: #11151a;
+        --repo: #ff9a92;
+        --repo-s: #3b1b19;
+        --svc: #8dbcff;
+        --svc-s: #14263e;
+        --ctrl: #c2adff;
+        --ctrl-s: #261e44;
+        --route: #dce1e8;
+        --route-s: #242b34;
+        --ui: #7ddc95;
+        --ui-s: #14311d;
+        --dom: #6fd6d4;
+        --dom-s: #103030;
+        --db: #d9c3ac;
+        --db-s: #2e2620;
+        --kw: #f39bd6;
+        --str: #8fe0a4;
+        --com: #8b94a3;
+        color-scheme: dark
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #0e1115;
+      --surface: #161a20;
+      --fg: #eceff3;
+      --muted: #b1b8c4;
+      --line: #2e353f;
+      --code: #11151a;
+      --repo: #ff9a92;
+      --repo-s: #3b1b19;
+      --svc: #8dbcff;
+      --svc-s: #14263e;
+      --ctrl: #c2adff;
+      --ctrl-s: #261e44;
+      --route: #dce1e8;
+      --route-s: #242b34;
+      --ui: #7ddc95;
+      --ui-s: #14311d;
+      --dom: #6fd6d4;
+      --dom-s: #103030;
+      --db: #d9c3ac;
+      --db-s: #2e2620;
+      --kw: #f39bd6;
+      --str: #8fe0a4;
+      --com: #8b94a3;
+      color-scheme: dark
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 16px/1.6 var(--f-body)
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0 0 auto;
+      height: env(safe-area-inset-top, 0px);
+      z-index: 10;
+      background: var(--surface)
+    }
+
+    .wrap {
+      max-width: 1140px;
+      margin: 0 auto;
+      padding-left: max(16px, env(safe-area-inset-left, 0px));
+      padding-right: max(16px, env(safe-area-inset-right, 0px))
+    }
+
+    a {
+      color: inherit
+    }
+
+    :focus-visible {
+      outline: 3px solid var(--svc);
+      outline-offset: 2px;
+      border-radius: 4px
+    }
+
+    h1,
+    h2,
+    h3 {
+      font-family: var(--f-display);
+      text-wrap: balance;
+      line-height: 1.1;
+      margin: 0
+    }
+
+    h1 {
+      font-size: clamp(2.2rem, 6vw, 4rem);
+      font-weight: 800;
+      font-stretch: 118%;
+      letter-spacing: -.01em
+    }
+
+    h2 {
+      font-size: clamp(1.6rem, 3.4vw, 2.3rem);
+      font-weight: 750;
+      font-stretch: 112%
+    }
+
+    h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      font-stretch: 108%
+    }
+
+    p {
+      margin: 0
+    }
+
+    code,
+    .mono {
+      font-family: var(--f-mono);
+      font-size: .88em
+    }
+
+    p code,
+    li code,
+    dd code,
+    td code {
+      background: var(--code);
+      border: 1px solid var(--line);
+      padding: 0 .3em;
+      border-radius: 4px
+    }
+
+    .lead {
+      max-width: 62ch;
+      font-size: 1.12rem;
+      color: var(--muted)
+    }
+
+    .eyebrow {
+      font: 600 .78rem/1 var(--f-mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted)
+    }
+
+    /* nav */
+    nav.top {
+      position: sticky;
+      top: env(safe-area-inset-top, 0px);
+      z-index: 9;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line)
+    }
+
+    nav.top .wrap {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-block: 10px;
+      scrollbar-width: thin
+    }
+
+    nav.top a {
+      flex: none;
+      text-decoration: none;
+      font: 600 .8rem/1 var(--f-mono);
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1.5px solid var(--c, var(--line));
+      color: var(--c, var(--fg));
+      background: var(--surface)
+    }
+
+    nav.top a:hover {
+      background: var(--s, var(--code))
+    }
+
+    header.hero {
+      padding-block: 56px 28px;
+      display: grid;
+      gap: 18px
+    }
+
+    /* layer color hooks */
+    .l-ui {
+      --c: var(--ui);
+      --s: var(--ui-s)
+    }
+
+    .l-mw {
+      --c: var(--route);
+      --s: var(--route-s)
+    }
+
+    .l-ctrl {
+      --c: var(--ctrl);
+      --s: var(--ctrl-s)
+    }
+
+    .l-svc {
+      --c: var(--svc);
+      --s: var(--svc-s)
+    }
+
+    .l-repo {
+      --c: var(--repo);
+      --s: var(--repo-s)
+    }
+
+    .l-db {
+      --c: var(--db);
+      --s: var(--db-s)
+    }
+
+    .l-dom {
+      --c: var(--dom);
+      --s: var(--dom-s)
+    }
+
+    /* flow strip */
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr) 84px) minmax(0, 1fr);
+      align-items: stretch;
+      margin-top: 8px
+    }
+
+    .node {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 14px 12px;
+      border: 2px solid var(--c);
+      border-radius: 10px;
+      background: var(--surface);
+      text-decoration: none;
+      min-width: 0;
+      transition: background .2s, border-color .2s, transform .2s
+    }
+
+    .node .k {
+      font: 600 .7rem/1 var(--f-mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--c)
+    }
+
+    .node b {
+      font: 750 1.15rem/1.15 var(--f-display);
+      font-stretch: 110%
+    }
+
+    .node small {
+      color: var(--muted);
+      font-size: .82rem;
+      line-height: 1.35
+    }
+
+    .node:hover {
+      background: var(--s)
+    }
+
+    .flow.playing .node {
+      border-color: var(--line)
+    }
+
+    .flow.playing .node.on {
+      border-color: var(--c);
+      background: var(--s);
+      transform: translateY(-3px);
+      box-shadow: 0 0 0 3px var(--c)
+    }
+
+    .link {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+      padding: 0 6px;
+      font: 500 .7rem/1.25 var(--f-mono);
+      color: var(--muted);
+      text-align: center
+    }
+
+    .link .fw::before {
+      content: "→";
+      display: block;
+      font-size: 1.1rem;
+      color: var(--fg)
+    }
+
+    .link .bw::before {
+      content: "←";
+      display: block;
+      font-size: 1.1rem;
+      color: var(--fg)
+    }
+
+    @media (max-width:900px) {
+      .flow {
+        grid-template-columns: 1fr
+      }
+
+      .link {
+        flex-direction: row;
+        justify-content: center;
+        gap: 28px;
+        padding: 8px 0
+      }
+
+      .link .fw::before {
+        content: "↓"
+      }
+
+      .link .bw::before {
+        content: "↑"
+      }
+    }
+
+    /* player */
+    .player {
+      margin-top: 28px;
+      border: 1.5px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface);
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr)
+    }
+
+    .scen {
+      border-right: 1.5px solid var(--line);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px
+    }
+
+    .scen button {
+      all: unset;
+      cursor: pointer;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: .95rem;
+      border: 1.5px solid transparent
+    }
+
+    .scen button:hover {
+      background: var(--code)
+    }
+
+    .scen button[aria-pressed="true"] {
+      background: var(--fg);
+      color: var(--bg)
+    }
+
+    .scen button:focus-visible {
+      outline: 3px solid var(--svc)
+    }
+
+    .stage {
+      padding: 20px 22px;
+      display: grid;
+      gap: 14px;
+      min-width: 0
+    }
+
+    .stage-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center
+    }
+
+    .stage h3 {
+      font-size: 1.35rem
+    }
+
+    .stage .txt {
+      max-width: 68ch
+    }
+
+    .bag {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap
+    }
+
+    .chip {
+      font: 500 .8rem/1.3 var(--f-mono);
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1.5px solid var(--line);
+      background: var(--code);
+      min-width: 0;
+      overflow-wrap: anywhere
+    }
+
+    .chip b {
+      font-weight: 600;
+      color: var(--muted);
+      margin-right: 6px
+    }
+
+    .chip.hot {
+      border-color: var(--c);
+      background: var(--s)
+    }
+
+    .ctrls {
+      display: flex;
+      gap: 8px;
+      align-items: center
+    }
+
+    .ctrls button {
+      font: 600 .9rem var(--f-body);
+      padding: 9px 16px;
+      border-radius: 8px;
+      border: 1.5px solid var(--fg);
+      background: var(--surface);
+      color: var(--fg);
+      cursor: pointer
+    }
+
+    .ctrls button.pri {
+      background: var(--fg);
+      color: var(--bg)
+    }
+
+    .ctrls button:disabled {
+      opacity: .4;
+      cursor: default
+    }
+
+    .dots {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap
+    }
+
+    .dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--line)
+    }
+
+    .dots span.on {
+      background: var(--fg)
+    }
+
+    .layer-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font: 600 .72rem/1 var(--f-mono);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--c);
+      padding: 5px 8px;
+      border: 1.5px solid var(--c);
+      border-radius: 5px;
+      background: var(--s)
+    }
+
+    @media (max-width:760px) {
+      .player {
+        grid-template-columns: 1fr
+      }
+
+      .scen {
+        border-right: 0;
+        border-bottom: 1.5px solid var(--line);
+        flex-direction: row;
+        flex-wrap: wrap
+      }
+    }
+
+    /* sections */
+    section.ch {
+      padding-block: 64px 8px;
+      scroll-margin-top: 64px
+    }
+
+    .ch-head {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 26px
+    }
+
+    .ch-head h2 {
+      color: var(--fg)
+    }
+
+    .ch-head h2 span {
+      color: var(--c)
+    }
+
+    .ties {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      font-size: .9rem;
+      color: var(--muted)
+    }
+
+    .ties b {
+      color: var(--fg)
+    }
+
+    .cols {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+      gap: 28px;
+      align-items: start
+    }
+
+    @media (max-width:980px) {
+      .cols {
+        grid-template-columns: minmax(0, 1fr)
+      }
+    }
+
+    dl.pts {
+      margin: 0;
+      display: grid;
+      gap: 0;
+      border-top: 1.5px solid var(--line)
+    }
+
+    dl.pts>div {
+      display: grid;
+      grid-template-columns: 200px minmax(0, 1fr);
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line)
+    }
+
+    dl.pts dt {
+      font: 600 .85rem/1.4 var(--f-mono);
+      color: var(--c);
+      text-transform: uppercase;
+      letter-spacing: .02em;
+      overflow-wrap: anywhere
+    }
+
+    dl.pts dd {
+      margin: 0
+    }
+
+    @media (max-width:620px) {
+      dl.pts>div {
+        grid-template-columns: 1fr;
+        gap: 4px
+      }
+    }
+
+    /* code */
+    figure.code {
+      margin: 0;
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      background: var(--code);
+      min-width: 0;
+      overflow: hidden
+    }
+
+    figure.code+figure.code {
+      margin-top: 16px
+    }
+
+    figure.code figcaption {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      font: 600 .78rem var(--f-mono);
+      color: var(--muted);
+      background: var(--surface)
+    }
+
+    figure.code button {
+      font: 600 .75rem var(--f-mono);
+      padding: 4px 10px;
+      border-radius: 5px;
+      border: 1px solid var(--line);
+      background: var(--code);
+      color: var(--fg);
+      cursor: pointer
+    }
+
+    pre {
+      margin: 0;
+      padding: 14px 16px;
+      overflow-x: auto;
+      font: 400 .82rem/1.6 var(--f-mono);
+      tab-size: 2
+    }
+
+    pre .k {
+      color: var(--kw);
+      font-weight: 600
+    }
+
+    pre .s {
+      color: var(--str)
+    }
+
+    pre .c {
+      color: var(--com);
+      font-style: italic
+    }
+
+    /* tables */
+    .tbl {
+      overflow-x: auto;
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface)
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: .92rem;
+      min-width: 620px
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top
+    }
+
+    th {
+      font: 600 .74rem var(--f-mono);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      background: var(--code)
+    }
+
+    tr:last-child td {
+      border-bottom: 0
+    }
+
+    td.num {
+      font-family: var(--f-mono);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums
+    }
+
+    /* login timeline */
+    ol.tl {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 0;
+      counter-reset: s
+    }
+
+    ol.tl li {
+      counter-increment: s;
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr);
+      gap: 14px;
+      padding: 0 0 18px;
+      position: relative
+    }
+
+    ol.tl li::before {
+      content: counter(s);
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font: 700 .9rem var(--f-mono);
+      background: var(--surface);
+      border: 2px solid var(--c);
+      color: var(--c);
+      z-index: 1
+    }
+
+    ol.tl li::after {
+      content: "";
+      position: absolute;
+      left: 16px;
+      top: 34px;
+      bottom: 0;
+      width: 2px;
+      background: var(--line)
+    }
+
+    ol.tl li:last-child::after {
+      display: none
+    }
+
+    ol.tl .body {
+      display: grid;
+      gap: 6px;
+      padding-top: 4px
+    }
+
+    .req-split {
+      font: 600 .8rem var(--f-mono);
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 4px 0 18px 58px
+    }
+
+    .cookie {
+      font: 500 clamp(.8rem, 1.6vw, .98rem)/2.1 var(--f-mono);
+      padding: 16px;
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      background: var(--code);
+      overflow-x: auto;
+      white-space: nowrap
+    }
+
+    .cookie span {
+      border-bottom: 3px solid var(--c);
+      padding-bottom: 2px;
+      margin-right: 2px
+    }
+
+    /* middleware chain */
+    .chain {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      overflow-x: auto;
+      padding-bottom: 6px
+    }
+
+    .gate {
+      flex: 1 1 0;
+      min-width: 170px;
+      border: 2px solid var(--c);
+      border-radius: 10px;
+      background: var(--surface);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px
+    }
+
+    .gate .stop {
+      margin-top: auto;
+      font: 600 .78rem/1.35 var(--f-mono);
+      color: var(--repo);
+      border-top: 1px dashed var(--line);
+      padding-top: 8px
+    }
+
+    .gate .pass {
+      font: 500 .78rem/1.35 var(--f-mono);
+      color: var(--muted)
+    }
+
+    .arrow {
+      flex: none;
+      width: 34px;
+      display: grid;
+      place-items: center;
+      font-size: 1.3rem;
+      color: var(--fg)
+    }
+
+    @media (max-width:860px) {
+      .chain {
+        flex-direction: column
+      }
+
+      .gate {
+        min-width: 0
+      }
+
+      .arrow {
+        width: auto;
+        height: 30px
+      }
+
+      .arrow::after {
+        content: "↓"
+      }
+
+      .arrow span {
+        display: none
+      }
+    }
+
+    .cards3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px
+    }
+
+    @media (max-width:900px) {
+      .cards3 {
+        grid-template-columns: minmax(0, 1fr)
+      }
+    }
+
+    .box {
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface);
+      padding: 16px;
+      display: grid;
+      gap: 8px;
+      align-content: start
+    }
+
+    .box ul {
+      margin: 0;
+      padding-left: 1.1em;
+      display: grid;
+      gap: 4px
+    }
+
+    .note {
+      border: 1.5px solid var(--c, var(--line));
+      background: var(--s, var(--surface));
+      border-radius: 10px;
+      padding: 14px 16px;
+      max-width: 80ch
+    }
+
+    .stack {
+      display: grid;
+      gap: 20px
+    }
+
+    .dom {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px
+    }
+
+    .dom span {
+      font: 700 .95rem var(--f-display);
+      font-stretch: 110%;
+      padding: 10px 14px;
+      border: 2px solid var(--dom);
+      border-radius: 8px;
+      color: var(--dom);
+      background: var(--dom-s)
+    }
+
+    footer {
+      padding-block: 60px 50px;
+      color: var(--muted);
+      font-size: .9rem
+    }
+
+    @media (prefers-reduced-motion:reduce) {
+      * {
+        transition: none !important
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <nav class="top" aria-label="Innhold">
+    <div class="wrap">
+      <a href="#oversikt">Oversikt</a>
+      <a href="#kontrakt" class="l-dom">Result&lt;T&gt;</a>
+      <a href="#repository" class="l-repo">Repository</a>
+      <a href="#service" class="l-svc">Service</a>
+      <a href="#controller" class="l-ctrl">Controller</a>
+      <a href="#routes" class="l-mw">Ruter + middleware</a>
+      <a href="#login" class="l-mw">Login-flyt</a>
+      <a href="#ui" class="l-ui">UI</a>
+    </div>
+  </nav>
+
+  <main class="wrap">
+    <header class="hero" id="oversikt">
+      <span class="eyebrow">ITF31619 Webapplikasjoner · Arkitektur</span>
+      <h1>Fra request til database</h1>
+      <p class="lead">Appen er delt i lag. Hvert lag har én jobb og snakker bare med laget ved siden av. Det som holder
+        lagene sammen er to ting: formen alle svar har, <code>{ ok, data }</code> eller
+        <code>{ ok: false, error }</code>, og <code>ctx</code>, ryggsekken som bærer innlogget bruker gjennom
+        forespørselen.
+      </p>
+      <div class="dom" aria-label="Ressursene i eksempelappen">
+        <span>Users</span><span>Projects</span><span>Tasks</span><span>Migrasjoner</span>
+      </div>
+    </header>
+
+    <div class="flow" id="flow">
+      <a class="node l-ui" data-layer="ui" href="#ui"><span class="k">Klient</span><b>UI</b><small>RSC, skjema, state,
+          AuthProvider</small></a>
+      <div class="link"><span class="fw">Forespørsel + cookie</span><span class="bw">Response</span></div>
+      <a class="node l-mw" data-layer="mw" href="#routes"><span class="k">Inngang</span><b>Ruter +
+          middleware</b><small>URL, verb, ctx.user, interruptors</small></a>
+      <div class="link"><span class="fw">request + ctx</span><span class="bw">Response</span></div>
+      <a class="node l-ctrl" data-layer="ctrl" href="#controller"><span
+          class="k">HTTP-lag</span><b>Controller</b><small>Parser input, velger statuskode</small></a>
+      <div class="link"><span class="fw">unknown + user</span><span class="bw">Result&lt;T&gt;</span></div>
+      <a class="node l-svc" data-layer="svc" href="#service"><span
+          class="k">Regler</span><b>Service</b><small>Forretningslogikk, Zod, tilgang</small></a>
+      <div class="link"><span class="fw">gyldige data</span><span class="bw">Result&lt;T&gt;</span></div>
+      <a class="node l-repo" data-layer="repo" href="#repository"><span
+          class="k">Data</span><b>Repository</b><small>Drizzle, paginering, søk, sortering</small></a>
+      <div class="link"><span class="fw">SQL</span><span class="bw">rader</span></div>
+      <div class="node l-db" data-layer="db"><span class="k">Lagring</span><b>Database</b><small>Tabeller og
+          migrasjoner</small></div>
+    </div>
+
+    <div class="player" id="player">
+      <div class="scen" role="group" aria-label="Velg scenario" id="scen"></div>
+      <div class="stage" aria-live="polite">
+        <div class="stage-top">
+          <span class="layer-tag" id="st-tag">Lag</span>
+          <div class="dots" id="st-dots" aria-hidden="true"></div>
+        </div>
+        <h3 id="st-title">Steg</h3>
+        <p class="txt" id="st-text"></p>
+        <div class="bag">
+          <span class="chip" id="st-cookie"><b>Cookie i nettleseren</b>–</span>
+          <span class="chip" id="st-ctx"><b>ctx.user</b>null</span>
+        </div>
+        <div class="ctrls">
+          <button id="prev" type="button">Forrige</button>
+          <button id="next" type="button" class="pri">Neste steg</button>
+          <span class="mono" id="st-count" style="color:var(--muted)"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ KONTRAKT ============ -->
+    <section class="ch l-dom" id="kontrakt">
+      <div class="ch-head">
+        <span class="eyebrow">Limet mellom lagene</span>
+        <h2><span>Result&lt;T&gt;</span> er kontrakten</h2>
+        <p class="lead">Repository, service og server actions svarer alltid med samme form. Den som kaller sjekker
+          <code>result.ok</code> og vet da nøyaktig hva som ligger i <code>data</code> eller <code>error</code>. Fordi
+          <code>error.code</code> er HTTP-statusen som tekst, trenger controlleren ingen oppslagstabell:
+          <code>Number(result.error.code)</code> er statusen.
+        </p>
+      </div>
+      <div class="cols">
+        <figure class="code">
+          <figcaption><span>Result-formen (skrevet ut i hvert interface i tasks)</span><button type="button"
+              data-copy>Kopier</button></figcaption>
+          <pre data-code="result"></pre>
+        </figure>
+        <div class="tbl">
+          <table>
+            <thead>
+              <tr>
+                <th>error.code</th>
+                <th>HTTP</th>
+                <th>Når</th>
+                <th>UI gjør</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">ok: true</td>
+                <td class="num">200 / 201 / 204</td>
+                <td>Alt gikk bra. 201 når noe ble opprettet, 204 når noe ble slettet (ingen body).</td>
+                <td>Vis data eller suksessmelding</td>
+              </tr>
+              <tr>
+                <td class="num">"400"</td>
+                <td class="num">400</td>
+                <td>Ugyldig eller manglende input. <code>fieldErrors</code> sier hvilket felt.</td>
+                <td>Vis melding ved feltet</td>
+              </tr>
+              <tr>
+                <td class="num">"401"</td>
+                <td class="num">401</td>
+                <td>Ikke innlogget</td>
+                <td>Send til innlogging</td>
+              </tr>
+              <tr>
+                <td class="num">"403"</td>
+                <td class="num">403</td>
+                <td>Innlogget, men ikke din ressurs, eller feil rolle</td>
+                <td>Vis «ingen tilgang»</td>
+              </tr>
+              <tr>
+                <td class="num">"404"</td>
+                <td class="num">404</td>
+                <td>Ressursen finnes ikke</td>
+                <td>Vis tom tilstand</td>
+              </tr>
+              <tr>
+                <td class="num">"409"</td>
+                <td class="num">409</td>
+                <td>Duplikat, f.eks. e-posten finnes</td>
+                <td>Forklar hva som kolliderer</td>
+              </tr>
+              <tr>
+                <td class="num">"500"</td>
+                <td class="num">500</td>
+                <td>Noe feilet på serveren, typisk i databasen</td>
+                <td>Generell melding, logg detaljer</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ REPOSITORY ============ -->
+    <section class="ch l-repo" id="repository">
+      <div class="ch-head">
+        <span class="layer-tag">Lag 1 · nærmest databasen</span>
+        <h2><span>Repository</span> henter og lagrer data</h2>
+        <p class="lead">Det eneste laget som snakker med databasen. Det vet ingenting om HTTP, cookies eller hvem som er
+          logget inn.</p>
+        <div class="ties"><span>Kalles av: <b>Service</b></span><span>Returnerer: <b>Result&lt;Project&gt;,
+              Result&lt;Project[]&gt; …</b></span></div>
+      </div>
+      <div class="cols">
+        <dl class="pts">
+          <div>
+            <dt>ORM / standard spørring</dt>
+            <dd>Drizzle-spørringene ligger her og ingen andre steder. Komponenter og controllere skriver aldri SQL.</dd>
+          </div>
+          <div>
+            <dt>Løst koblet</dt>
+            <dd>Resten av appen vet ikke om dataene kommer fra D1, Postgres eller en testdatabase. Bytter du database,
+              endrer du bare dette laget.</dd>
+          </div>
+          <div>
+            <dt>Interface (kontrakt)</dt>
+            <dd>Et TypeScript-interface sier hvilke metoder som finnes og hva de returnerer. Servicen avhenger av
+              interfacet, ikke av implementasjonen.</dd>
+          </div>
+          <div>
+            <dt>Result</dt>
+            <dd>Hver metode fanger egne feil med <code>try/catch</code>, logger dem og svarer
+              <code>{ ok: false, error: { code: "500" } }</code>. Ingen ukontrollerte exceptions oppover.
+            </dd>
+          </div>
+          <div>
+            <dt>null er ikke en feil</dt>
+            <dd>Finner <code>findById</code> ingenting, svarer den <code>{ ok: true, data: null }</code>. Det er
+              servicen som bestemmer at det blir 404.</dd>
+          </div>
+          <div>
+            <dt>Export av factory</dt>
+            <dd><code>createProjectRepository(db)</code> lager en ny instans. Brukes i tester der du sender inn en
+              testdatabase.</dd>
+          </div>
+          <div>
+            <dt>Export av singleton</dt>
+            <dd><code>repository</code> er én ferdig instans som resten av appen importerer.</dd>
+          </div>
+          <div>
+            <dt>Paginering</dt>
+            <dd><code>page</code> og <code>limit</code> blir til <code>limit</code> og <code>offset</code>. Du henter
+              aldri tusen rader for å vise tjue.</dd>
+          </div>
+          <div>
+            <dt>Filtrering / søk</dt>
+            <dd><code>q</code>, <code>status</code> og <code>ownerId</code> blir til <code>where</code>. I Drizzle v1 er
+              det et vanlig objekt, og <code>undefined</code> betyr «ikke filtrer på dette».</dd>
+          </div>
+          <div>
+            <dt>Sortering</dt>
+            <dd><code>sortBy</code> og <code>order</code> blir til <code>orderBy</code>. Bare kjente feltnavn, aldri fri
+              tekst fra brukeren. Det sjekker <code>validateListParams</code> i servicen.</dd>
+          </div>
+        </dl>
+        <div>
+          <figure class="code">
+            <figcaption><span>features/projects/project-repository.ts</span><button type="button"
+                data-copy>Kopier</button></figcaption>
+            <pre data-code="repo"></pre>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SERVICE ============ -->
+    <section class="ch l-svc" id="service">
+      <div class="ch-head">
+        <span class="layer-tag">Lag 2 · reglene</span>
+        <h2><span>Service</span> bestemmer hva som er lov</h2>
+        <p class="lead">Forretningslogikken bor her. Servicen får brukeren som parameter i stedet for å lese cookies
+          selv. Derfor kan samme regel brukes fra en API-rute, en server action og en test.</p>
+        <div class="ties"><span>Kalles av: <b>Controller, server action, RSC</b></span><span>Bruker:
+            <b>Repository</b></span><span>Returnerer: <b>Result&lt;ProjectDTO&gt;</b></span></div>
+      </div>
+      <div class="cols">
+        <dl class="pts">
+          <div>
+            <dt>Forretningslogikk</dt>
+            <dd>Hvem kan opprette prosjekt, hvem blir eier, hvem får se hva. Ingen HTTP og ingen SQL, stort sett ren
+              TypeScript.</dd>
+          </div>
+          <div>
+            <dt>Bruker repository</dt>
+            <dd>Servicen kaller repositoryet og får et Result tilbake. En databasefeil (500) sendes rett videre.
+              <code>null</code> blir til 404.
+            </dd>
+          </div>
+          <div>
+            <dt>Sjekk på bruker</dt>
+            <dd>Er brukeren logget inn (401)? Eier brukeren prosjektet, eller er det en admin (403)? Brukeren kommer fra
+              <code>ctx.user</code>, sendt inn av laget over.
+            </dd>
+          </div>
+          <div>
+            <dt>Admin ser alt</dt>
+            <dd>I <code>list</code>: <code>ownerId: isAdmin(user) ? undefined : user.id</code>. Admin får alle
+              prosjektene, andre bare sine egne.</dd>
+          </div>
+          <div>
+            <dt>Validere data (Zod)</dt>
+            <dd>Alt som kommer ovenfra er <code>unknown</code> til det er validert. <code>safeParse</code> gir enten
+              gyldige data eller en feil, uten å kaste. <code>z.flattenError</code> gjør feilen om til
+              <code>fieldErrors</code>.
+            </dd>
+          </div>
+          <div>
+            <dt>Regler</dt>
+            <dd>Zod sjekker formen. Reglene (minst 3 tegn i tittelen) ligger i <code>validateProject</code>, en vanlig
+              funksjon du kan teste uten server.</dd>
+          </div>
+          <div>
+            <dt>Eier settes her</dt>
+            <dd><code>ownerId</code> hentes fra brukeren, aldri fra body. Ellers kan hvem som helst opprette prosjekter
+              i andres navn.</dd>
+          </div>
+          <div>
+            <dt>DTO ut</dt>
+            <dd><code>toProjectDTO</code> plukker ut feltene klienten skal se, og gjør datoer om til tekst. Raden fra
+              databasen går aldri rett ut.</dd>
+          </div>
+          <div>
+            <dt>Interface, factory, singleton</dt>
+            <dd>Samme mønster som repository. <code>createProjectService(repository)</code> gjør det enkelt å teste med
+              et falskt repository.</dd>
+          </div>
+        </dl>
+        <figure class="code">
+          <figcaption><span>features/projects/project-service.ts</span><button type="button" data-copy>Kopier</button>
+          </figcaption>
+          <pre data-code="svc"></pre>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ============ CONTROLLER ============ -->
+    <section class="ch l-ctrl" id="controller">
+      <div class="ch-head">
+        <span class="layer-tag">Lag 3 · HTTP inn og ut</span>
+        <h2><span>Controller</span> oversetter mellom HTTP og koden din</h2>
+        <p class="lead">Controlleren håndterer alt som har med request og response å gjøre. Den gjør rådata om til
+          objekter på vei inn, og svaret fra servicen om til statuskode og JSON på vei ut.</p>
+        <div class="ties"><span>Kalles av: <b>Rute</b></span><span>Bruker: <b>Service</b></span><span>Returnerer:
+            <b>Response</b></span></div>
+      </div>
+      <div class="cols">
+        <dl class="pts">
+          <div>
+            <dt>Request og response</dt>
+            <dd>Det eneste laget, utenom ruter og middleware, som kjenner <code>Request</code>, <code>Response</code>,
+              headers og statuskoder.</dd>
+          </div>
+          <div>
+            <dt>Ta imot data</dt>
+            <dd>Leser <code>request.json()</code> eller søkeparametrene (<code>parseParams</code>), og gjør dem om til
+              vanlige objekter servicen forstår.</dd>
+          </div>
+          <div>
+            <dt>Konvertering kan feile</dt>
+            <dd>Ødelagt JSON skal gi 400 med en forståelig melding, ikke krasje. Pakk parsingen i
+              <code>try/catch</code>.
+            </dd>
+          </div>
+          <div>
+            <dt>Metoder / verb</dt>
+            <dd>Én metode per handling: <code>list</code>, <code>find</code>, <code>create</code>, <code>update</code>,
+              <code>remove</code>. Ruta bestemmer hvilken som kjøres.
+            </dd>
+          </div>
+          <div>
+            <dt>Validere data</dt>
+            <dd>Bare at bodyen lar seg lese. Formen (Zod) og reglene sjekkes i servicen.</dd>
+          </div>
+          <div>
+            <dt>Result → statuskode</dt>
+            <dd><code>error.code</code> er allerede statusen som tekst: <code>Number(result.error.code)</code>. Ved
+              suksess velger controlleren selv: 200, 201 (opprettet) eller 204 (slettet).</dd>
+          </div>
+          <div>
+            <dt>Factory og singleton</dt>
+            <dd><code>createProjectController(service)</code> og <code>controller</code>. Samme mønster som lagene
+              under.</dd>
+          </div>
+        </dl>
+        <figure class="code">
+          <figcaption><span>features/projects/project-controller.ts</span><button type="button"
+              data-copy>Kopier</button></figcaption>
+          <pre data-code="ctrl"></pre>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ============ ROUTES ============ -->
+    <section class="ch l-mw" id="routes">
+      <div class="ch-head">
+        <span class="layer-tag">Lag 4 · inngangen</span>
+        <h2><span>Ruter og middleware</span> styrer hvem som slipper inn hvor</h2>
+        <p class="lead">Ruta kobler URL og HTTP-verb til riktig controllermetode. Middleware kjører før alt annet og
+          fyller ryggsekken (<code>ctx</code>). Interruptors står foran handleren på én rute, og kan stoppe
+          forespørselen tidlig.</p>
+        <div class="ties"><span>Mottar fra: <b>Nettleseren</b></span><span>Sender videre til: <b>Controller eller
+              side</b></span></div>
+      </div>
+      <div class="stack">
+        <div class="cols">
+          <dl class="pts">
+            <div>
+              <dt>/api/v1/resource</dt>
+              <dd>Ressurser i flertall, som substantiv, på engelsk: <code>/api/v1/projects</code>, ikke
+                <code>/api/v1/getProject</code>. <code>v1</code> lar deg lage en ny versjon senere uten å knekke gamle
+                klienter.
+              </dd>
+            </div>
+            <div>
+              <dt>HTTP-metoder</dt>
+              <dd><code>GET</code> henter, <code>POST</code> oppretter, <code>PUT</code> erstatter alt,
+                <code>PATCH</code> endrer deler, <code>DELETE</code> sletter. Verbet står i metoden, ikke i URL-en.
+              </dd>
+            </div>
+            <div>
+              <dt>Én route per sti</dt>
+              <dd>Samle metodene i samme <code>route(...)</code>. rwsdk velger den første ruta som matcher stien. Står
+                stien to ganger, svarer den første <code>405</code> på metoden den mangler.</dd>
+            </div>
+            <div>
+              <dt>Headers og body</dt>
+              <dd>Headers bærer metadata: <code>Content-Type</code>, <code>Cookie</code>, <code>Accept</code>. Body
+                bærer selve dataene.</dd>
+            </div>
+            <div>
+              <dt>Middleware og interruptors</dt>
+              <dd>Middleware står øverst i <code>defineApp</code> og kjører på alle forespørsler (<code>setUser</code>).
+                En interruptor står foran handleren på én rute (<code>requireUser</code>). Returnerer de ingenting, går
+                forespørselen videre. Returnerer de en <code>Response</code>, stopper kjeden der.</dd>
+            </div>
+            <div>
+              <dt>API og sider</dt>
+              <dd>API-rutene står utenfor <code>render()</code> og svarer med JSON. Sidene står inni, og bruker
+                <code>requireUserPage</code>, som sender deg til <code>/login</code> i stedet for å svare 401.
+              </dd>
+            </div>
+            <div>
+              <dt>Response</dt>
+              <dd>Svaret har statuskode, headers og body. Body er <code>{ ok: true, data }</code> ved suksess og
+                <code>{ ok: false, error }</code> ved feil.
+              </dd>
+            </div>
+          </dl>
+          <div>
+            <figure class="code">
+              <figcaption><span>features/projects/project-routes.ts</span><button type="button"
+                  data-copy>Kopier</button></figcaption>
+              <pre data-code="routes"></pre>
+            </figure>
+            <figure class="code">
+              <figcaption><span>worker.tsx</span><button type="button" data-copy>Kopier</button></figcaption>
+              <pre data-code="worker"></pre>
+            </figure>
+          </div>
+        </div>
+        <h3>Kobling mot riktig metode i controller</h3>
+        <div class="tbl">
+          <table>
+            <thead>
+              <tr>
+                <th>Verb og URL</th>
+                <th>Controller</th>
+                <th>Hva skjer</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="num">GET /api/v1/projects</td>
+                <td class="num">list</td>
+                <td>Liste. Paginering, søk og sortering i query: <code>?page=2&amp;q=eksamen&amp;sortBy=title</code>
+                </td>
+              </tr>
+              <tr>
+                <td class="num">GET /api/v1/projects/:id</td>
+                <td class="num">find</td>
+                <td>Én ressurs. <code>:id</code> leses fra <code>params.id</code>.</td>
+              </tr>
+              <tr>
+                <td class="num">GET /api/v1/projects/:id/tasks</td>
+                <td class="num">listTasks</td>
+                <td>Relaterte ressurser som hører til prosjektet.</td>
+              </tr>
+              <tr>
+                <td class="num">GET /api/v1/users/:id?projects=true</td>
+                <td class="num">find</td>
+                <td>Samme ressurs, men ta med relasjoner når klienten ber om det.</td>
+              </tr>
+              <tr>
+                <td class="num">POST /api/v1/projects</td>
+                <td class="num">create</td>
+                <td>Body har tittel og beskrivelse. Eieren hentes fra <code>ctx.user</code>, ikke fra body. Svarer 201.
+                </td>
+              </tr>
+              <tr>
+                <td class="num">PATCH /api/v1/projects/:id</td>
+                <td class="num">update</td>
+                <td>Endrer felt. Servicen sjekker at brukeren eier prosjektet, eller er admin.</td>
+              </tr>
+              <tr>
+                <td class="num">POST /api/v1/projects/:id/complete</td>
+                <td class="num">action</td>
+                <td>En handling i stedet for å sende feltene selv. Klienten trenger ikke vite hvilke felt som endres.
+                </td>
+              </tr>
+              <tr>
+                <td class="num">DELETE /api/v1/projects/:id</td>
+                <td class="num">remove</td>
+                <td>Bare admin (<code>requireAdmin</code>). Svarer <code>204 No Content</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LOGIN ============ -->
+    <section class="ch l-mw" id="login">
+      <div class="ch-head">
+        <span class="layer-tag">På tvers av alle lag</span>
+        <h2><span>Login-flyten:</span> fra skjema til ctx.user</h2>
+        <p class="lead">Innlogging er to ulike forespørsler. Den første setter en cookie. Alle senere forespørsler har
+          cookien med seg, og middleware gjør den om til <code>ctx.user</code> før noe annet kjører.</p>
+        <p class="note l-repo"><b>Forenklet med vilje.</b> Dette er jukseinnloggingen fra tasks: du velger hvem du er,
+          uten passord, og cookien er bare bruker-id-en. Login-handleren snakker rett med databasen. En ekte innlogging
+          har samme lagdeling som prosjektene: controller, service (passord mot hash) og repository, og lagrer en
+          tilfeldig sesjons-id i en sessions-tabell. Stedene som er usikre er merket <code>USIKKERT:</code> i koden, med
+          alternativet.</p>
+      </div>
+
+      <div class="cols">
+        <div>
+          <ol class="tl">
+            <li class="l-ui">
+              <div class="body"><span class="layer-tag">UI</span>
+                <p>Brukeren velger seg selv i nedtrekkslista og sender skjemaet: <code>POST /login</code> med
+                  <code>userId</code> som FormData. Et vanlig <code>&lt;form method="post"&gt;</code>, ingen JavaScript.
+                </p>
+              </div>
+            </li>
+            <li class="l-mw">
+              <div class="body"><span class="layer-tag">Middleware</span>
+                <p><code>setUser</code> finner ingen cookie og setter <code>ctx.user = null</code>. <code>/login</code>
+                  har ingen interruptor, så forespørselen går videre.</p>
+              </div>
+            </li>
+            <li class="l-mw">
+              <div class="body"><span class="layer-tag">Rute-handler</span>
+                <p><code>login</code> i <code>auth-routes.ts</code> leser FormData og sjekker at <code>userId</code> er
+                  et positivt heltall. Ugyldig gir 400.</p>
+              </div>
+            </li>
+            <li class="l-db">
+              <div class="body"><span class="layer-tag">Database</span>
+                <p><code>db.query.users.findFirst({ where: { id } })</code>. Finnes ikke brukeren, svarer handleren 400
+                  «Ugyldig innlogging».</p>
+              </div>
+            </li>
+            <li class="l-mw">
+              <div class="body"><span class="layer-tag">Rute-handler</span>
+                <p>Svarer <code>303 See Other</code> med <code>Location: /projects</code> og <code>Set-Cookie</code>.
+                  303 betyr «hent denne siden med GET», så Reload sender ikke skjemaet på nytt.</p>
+              </div>
+            </li>
+            <li class="l-ui">
+              <div class="body"><span class="layer-tag">Nettleser</span>
+                <p>Lagrer cookien og følger <code>Location</code>. JavaScript kan ikke lese cookien
+                  (<code>HttpOnly</code>), men nettleseren sender den automatisk med på alle senere forespørsler til
+                  samme domene.</p>
+              </div>
+            </li>
+          </ol>
+          <p class="req-split">Neste forespørsel, f.eks. POST /api/v1/projects</p>
+          <ol class="tl" style="counter-reset:s 6">
+            <li class="l-mw">
+              <div class="body"><span class="layer-tag">Middleware</span>
+                <p><code>setUser</code> leser <code>Cookie: session=2</code>, slår opp brukeren i databasen og setter
+                  <code>ctx.user = { id, name, email, role }</code>. Rollen bor i databasen, ikke i cookien.
+                </p>
+              </div>
+            </li>
+            <li class="l-mw">
+              <div class="body"><span class="layer-tag">Interruptor</span>
+                <p><code>requireUser</code> eller <code>requireAdmin</code> leser <code>ctx.user</code>. Mangler
+                  brukeren: <code>401</code>. Feil rolle: <code>403</code>. Ellers går forespørselen videre.</p>
+              </div>
+            </li>
+            <li class="l-ctrl">
+              <div class="body"><span class="layer-tag">Controller → Service</span>
+                <p>Controlleren sender <code>ctx.user</code> inn i servicen, som bruker <code>user.id</code> som eier og
+                  sjekker eierskap og rolle der reglene krever det.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+        <div class="stack">
+          <figure class="code">
+            <figcaption><span>features/auth/auth-routes.ts</span><button type="button" data-copy>Kopier</button>
+            </figcaption>
+            <pre data-code="login"></pre>
+          </figure>
+          <figure class="code">
+            <figcaption><span>features/auth/session.ts</span><button type="button" data-copy>Kopier</button>
+            </figcaption>
+            <pre data-code="cookie"></pre>
+          </figure>
+        </div>
+      </div>
+
+      <div class="stack" style="margin-top:40px">
+        <h3>Anatomien til Set-Cookie</h3>
+        <div class="cookie" aria-label="Set-Cookie-header delt opp">Set-Cookie: <span class="l-dom">session=2</span>;
+          <span class="l-repo">HttpOnly</span>; <span class="l-ctrl">SameSite=Lax</span>; <span
+            class="l-ui">Path=/</span>; <span class="l-mw">Max-Age=3600</span>; <span class="l-svc">Secure</span>
+        </div>
+        <dl class="pts">
+          <div class="l-dom">
+            <dt>session=2</dt>
+            <dd>Bare bruker-id-en. Ingen rolle og intet passord. <b>USIKKERT:</b> endrer du <code>2</code> til
+              <code>1</code> i DevTools, er du en annen bruker. Alternativ: signer verdien, eller lagre en tilfeldig
+              sesjons-id i en sessions-tabell.
+            </dd>
+          </div>
+          <div class="l-repo">
+            <dt>HttpOnly</dt>
+            <dd>JavaScript i nettleseren kan ikke lese cookien (<code>document.cookie</code>). Klarer noen å kjøre kode
+              på siden (XSS), får de ikke med seg sesjonen.</dd>
+          </div>
+          <div class="l-ctrl">
+            <dt>SameSite=Lax</dt>
+            <dd>Sendes ikke med når andre nettsteder poster skjema eller kaller <code>fetch</code> hit. Beskytter mot
+              CSRF.</dd>
+          </div>
+          <div class="l-ui">
+            <dt>Path=/</dt>
+            <dd>Gjelder hele appen, både sider og <code>/api</code>.</dd>
+          </div>
+          <div class="l-mw">
+            <dt>Max-Age=3600</dt>
+            <dd>Sekunder før nettleseren kaster cookien: én time. <code>0</code> betyr «slett nå», og det er slik
+              utlogging virker.</dd>
+          </div>
+          <div class="l-svc">
+            <dt>Secure</dt>
+            <dd>Sendes bare over HTTPS. Tasks skrur den av på utviklingsserveren, som kjører på http.</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="stack" style="margin-top:40px">
+        <h3>Kjeden: middleware fyller ryggsekken, interruptors slipper videre eller svarer selv</h3>
+        <div class="chain">
+          <div class="gate l-mw" style="--c:var(--route)"><span class="eyebrow">Forespørsel inn</span>
+            <p class="mono" style="font-size:.85rem">POST /api/v1/projects<br>Cookie: session=2</p>
+          </div>
+          <div class="arrow"><span>→</span></div>
+          <div class="gate" style="--c:var(--dom)"><span class="layer-tag l-dom">Middleware</span>
+            <p><b>setUser</b></p>
+            <p class="pass">Leser cookien, slår opp bruker og rolle, setter ctx.user eller null</p>
+            <p class="stop" style="color:var(--muted)">Stopper aldri</p>
+          </div>
+          <div class="arrow"><span>→</span></div>
+          <div class="gate" style="--c:var(--svc)"><span class="layer-tag l-svc">Interruptor</span>
+            <p><b>requireUser</b></p>
+            <p class="pass">ctx.user finnes → videre</p>
+            <p class="stop">Ellers 401</p>
+          </div>
+          <div class="arrow"><span>→</span></div>
+          <div class="gate" style="--c:var(--ctrl)"><span class="layer-tag l-ctrl">Interruptor</span>
+            <p><b>requireAdmin</b> (bare DELETE)</p>
+            <p class="pass">role === "admin" → videre</p>
+            <p class="stop">Ellers 403</p>
+          </div>
+          <div class="arrow"><span>→</span></div>
+          <div class="gate" style="--c:var(--ui)"><span class="layer-tag l-ui">Mål</span>
+            <p><b>Controller</b> (API) eller <b>side</b> (RSC)</p>
+            <p class="pass">Leser ctx.user, gjør jobben</p>
+          </div>
+        </div>
+        <div class="cols">
+          <figure class="code">
+            <figcaption><span>features/auth/session.ts + middleware.ts</span><button type="button"
+                data-copy>Kopier</button></figcaption>
+            <pre data-code="mw"></pre>
+          </figure>
+          <figure class="code">
+            <figcaption><span>features/auth/middleware.ts</span><button type="button" data-copy>Kopier</button>
+            </figcaption>
+            <pre data-code="guards"></pre>
+          </figure>
+        </div>
+        <p class="note l-repo"><b>Utlogging</b> er en <code>POST</code> fra et skjema, ikke en lenke, fordi en
+          <code>GET</code> aldri skal endre noe. Svaret er <code>303</code> til <code>/</code> med
+          <code>Set-Cookie: session=; Max-Age=0</code>, og nettleseren kaster cookien. <b>USIKKERT:</b> serveren har
+          ingenting å slette, så en kopiert cookie virker fortsatt. Med en sessions-tabell sletter du raden, og da er
+          cookien ugyldig uansett hvem som har den.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============ UI ============ -->
+    <section class="ch l-ui" id="ui">
+      <div class="ch-head">
+        <span class="layer-tag">Lag 5 · det brukeren ser</span>
+        <h2><span>UI:</span> liste, skjema og tilstand</h2>
+        <p class="lead">Server-komponenter (RSC) kan kalle servicen direkte, fordi de kjører på serveren.
+          Klient-komponenter må gå via en server action eller en <code>fetch</code> til en API-rute. Uansett kommer
+          svaret tilbake i samme form: <code>{ ok, data }</code> eller <code>{ ok: false, error }</code>.</p>
+      </div>
+      <div class="stack">
+        <div class="cards3">
+          <div class="box l-ui"><span class="layer-tag">List-komponent</span>
+            <h3>RSC som bruker service</h3>
+            <p>Kjører på serveren, henter <code>ctx.user</code> fra <code>requestInfo</code> og kaller
+              <code>service.list</code>. Ingen <code>useEffect</code>, ingen loading-state i klienten.
+              <code>Suspense</code> viser en plassholder mens dataene kommer.
+            </p>
+          </div>
+          <div class="box l-ui"><span class="layer-tag">Create-komponent</span>
+            <h3>Skjema med server action</h3>
+            <p><code>useActionState</code> gir deg forrige svar og <code>isPending</code>. Actionen sender
+              <code>ctx.user</code> til samme service som API-ruta, fordi rute-interruptors ikke beskytter server
+              actions.
+            </p>
+          </div>
+          <div class="box l-ui"><span class="layer-tag">Klient med fetch</span>
+            <h3>project-api.ts + useTransition</h3>
+            <p><code>fetch</code>-kallet ligger i én fil. Komponenten får et Result tilbake og leser
+              <code>error.code</code>. Cookien følger med automatisk når forespørselen går til samme domene.
+            </p>
+          </div>
+        </div>
+
+        <div class="cols">
+          <div class="stack">
+            <h3>Skjemaet</h3>
+            <dl class="pts">
+              <div>
+                <dt>Form med inputfelter</dt>
+                <dd>Bruk <code>&lt;form&gt;</code> og <code>name</code> på feltene, så fungerer både FormData og
+                  tastatur (Enter sender).</dd>
+              </div>
+              <div>
+                <dt>Labels</dt>
+                <dd>Hvert felt har en <code>&lt;label htmlFor&gt;</code>. Skjermlesere leser den, og klikk på teksten
+                  fokuserer feltet.</dd>
+              </div>
+              <div>
+                <dt>ARIA</dt>
+                <dd><code>aria-invalid</code> på feltet med feil, <code>aria-describedby</code> som peker på
+                  feilmeldingen, <code>role="alert"</code> så feilen blir lest opp.</dd>
+              </div>
+              <div>
+                <dt>Button</dt>
+                <dd><code>type="submit"</code>, deaktivert mens den jobber, og teksten forteller hva som skjer:
+                  «Lagrer...».</dd>
+              </div>
+              <div>
+                <dt>Placeholder</dt>
+                <dd>Et eksempel på hva som skal skrives. Aldri en erstatning for label, den forsvinner når brukeren
+                  skriver.</dd>
+              </div>
+            </dl>
+            <h3>State</h3>
+            <dl class="pts">
+              <div>
+                <dt>Formdata</dt>
+                <dd>La FormData lese verdiene ved submit. Feiler det, sender actionen verdiene tilbake
+                  (<code>values</code>), så feltet kan fylles inn igjen med <code>defaultValue</code>.</dd>
+              </div>
+              <div>
+                <dt>Pending</dt>
+                <dd>Loading / lagrer. Hindrer dobbel innsending og viser at noe skjer.</dd>
+              </div>
+              <div>
+                <dt>Success</dt>
+                <dd>Bekreft med <code>role="status"</code> og tøm eller lukk skjemaet.</dd>
+              </div>
+              <div>
+                <dt>Error 400</dt>
+                <dd>Validering. <code>fieldErrors.title[0]</code> vises ved feltet som er feil.</dd>
+              </div>
+              <div>
+                <dt>Error 401 / 403</dt>
+                <dd>Auth. 401: send til innlogging. 403: forklar at brukeren mangler tilgang.</dd>
+              </div>
+              <div>
+                <dt>Error 409</dt>
+                <dd>Duplikat. Si hva som allerede finnes.</dd>
+              </div>
+              <div>
+                <dt>Error 500</dt>
+                <dd>Serverfeil. Generell melding og mulighet for å prøve igjen.</dd>
+              </div>
+            </dl>
+            <h3>Logikk ved submit</h3>
+            <dl class="pts">
+              <div>
+                <dt>preventDefault</dt>
+                <dd>Bare når du sender med <code>fetch</code> selv. Med server action tar React seg av innsendingen.
+                </dd>
+              </div>
+              <div>
+                <dt>Validering</dt>
+                <dd>Rask sjekk i klienten for god brukeropplevelse. Serveren validerer alltid på nytt, fordi klienten
+                  kan omgås.</dd>
+              </div>
+              <div>
+                <dt>Submit av data</dt>
+                <dd>Tre veier: server action, <code>fetch</code> til en API-rute, eller et vanlig
+                  <code>&lt;form method="post"&gt;</code> slik <code>/login</code> gjør. For prosjekter ender alle i
+                  samme service.
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <div class="stack">
+            <figure class="code">
+              <figcaption><span>features/projects/pages/ProjectsPage.tsx (RSC)</span><button type="button"
+                  data-copy>Kopier</button></figcaption>
+              <pre data-code="rsc"></pre>
+            </figure>
+            <figure class="code">
+              <figcaption><span>features/projects/actions.ts</span><button type="button" data-copy>Kopier</button>
+              </figcaption>
+              <pre data-code="action"></pre>
+            </figure>
+            <figure class="code">
+              <figcaption><span>features/projects/components/CreateProjectForm.tsx</span><button type="button"
+                  data-copy>Kopier</button></figcaption>
+              <pre data-code="form"></pre>
+            </figure>
+            <figure class="code">
+              <figcaption><span>features/projects/project-api.ts</span><button type="button" data-copy>Kopier</button>
+              </figcaption>
+              <pre data-code="api"></pre>
+            </figure>
+            <figure class="code">
+              <figcaption><span>features/projects/components/CreateProjectClient.tsx (fetch)</span><button type="button"
+                  data-copy>Kopier</button></figcaption>
+              <pre data-code="fetch"></pre>
+            </figure>
+          </div>
+        </div>
+
+        <h3>Rollen sjekkes tre steder, men bare to av dem er sikkerhet</h3>
+        <div class="cards3">
+          <div class="box l-mw"><span class="layer-tag">Interruptor</span>
+            <h3>requireAdmin på DELETE</h3>
+            <p>Kjører på serveren før controlleren. Uten admin-rolle får brukeren 403, og servicen kalles aldri.</p>
+          </div>
+          <div class="box l-svc"><span class="layer-tag">Service</span>
+            <h3>canAccess: eier eller admin</h3>
+            <p>Å lese og endre ett prosjekt krever at du eier det eller er admin. Gjelder uansett om kallet kommer fra
+              API-ruta eller en server action.</p>
+          </div>
+          <div class="box l-ui"><span class="layer-tag">UI-sjekk</span>
+            <h3>Skjul Slett for andre</h3>
+            <p>Brukervennlighet, ikke sikkerhet. En vanlig bruker kan fortsatt sende <code>DELETE</code> med curl eller
+              fra DevTools, så serveren må alltid sjekke selv.</p>
+          </div>
+        </div>
+        <div class="cols">
+          <p class="note l-ui"><b>Context (AuthProvider)</b> gir klient-komponenter tilgang til innlogget bruker uten å
+            sende den som prop gjennom hvert nivå. Brukeren kommer fra serveren (<code>ctx.user</code>) og sendes inn i
+            provideren i <code>AppLayout</code>. Konteksten er en kopi for visning. Det er serveren som bestemmer.</p>
+          <figure class="code">
+            <figcaption><span>features/auth/components/AuthProvider.tsx</span><button type="button"
+                data-copy>Kopier</button></figcaption>
+            <pre data-code="provider"></pre>
+          </figure>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= KODE ================= -->
+  <script type="text/plain" id="code-result">
+// Formen alle lag svarer med. I tasks står den skrevet ut i hvert
+// interface. Her kaller vi den Result<T>, så eksemplene blir kortere.
+type Result<T> =
+  | { ok: true; data: T }
+  | {
+      ok: false;
+      error: {
+        // HTTP-statusen som tekst: "400", "401", "403", "404", "500"
+        code: string;
+        // Til brukeren, på norsk
+        message: string;
+        // Feil per felt, f.eks. { title: ["Tittel må ha minst 3 tegn"] }
+        fieldErrors: Record<string, string[]>;
+      };
+    };
+
+// Ingen hjelpefunksjon. En feil er bare objektet:
+const notLoggedIn = {
+  ok: false,
+  error: { code: "401", message: "Du må være innlogget", fieldErrors: {} },
+};
+
+// Controlleren gjør koden om til status, uten oppslagstabell:
+// Response.json(result, { status: Number(result.error.code) })
+</script>
+
+  <script type="text/plain" id="code-repo">
+// Her lager vi en abstraksjon rundt databasen. Da kan vi teste med en
+// annen database, eller bytte driver, uten å endre resten av appen.
+
+// Interface = kontrakten servicen forholder seg til
+export interface ProjectRepository {
+  // ownerId: bare prosjektene til denne brukeren. undefined gir alle.
+  findMany(
+    params: ProjectListParams & { ownerId?: number },
+  ): Promise<Result<Project[]>>;
+  // null = ingen prosjekt med denne id-en
+  findById(id: string): Promise<Result<Project | null>>;
+  create(data: CreateProject): Promise<Result<Project>>;
+}
+
+// Factory: lager en instans med databasen du sender inn (nyttig i test)
+export function createProjectRepository(_db: DB): ProjectRepository {
+  return {
+    async findMany({ ownerId, status, q, sortBy, order, page, limit }) {
+      try {
+        const rows = await _db.query.projects.findMany({
+          // Filtrering og søk. undefined betyr «ikke filtrer på dette»
+          where: {
+            ownerId,
+            status,
+            title: q ? { like: `%${q}%` } : undefined,
+          },
+          // Sortering. sortBy er allerede sjekket mot kjente felt
+          orderBy: sortBy === "title" ? { title: order } : { createdAt: order },
+          // Paginering: side 2 med 20 per side hopper over de 20 første
+          limit,
+          offset: (page - 1) * limit,
+        });
+
+        return { ok: true, data: rows };
+      } catch (error) {
+        console.error(error);
+        return {
+          ok: false,
+          error: { code: "500", message: "Noe gikk galt med uthentingen", fieldErrors: {} },
+        };
+      }
+    },
+
+    async findById(id) {
+      try {
+        const project = await _db.query.projects.findFirst({ where: { id } });
+
+        // Fant vi ingenting, er det ikke en feil her. Servicen avgjør 404.
+        return { ok: true, data: project ?? null };
+      } catch (error) {
+        console.error(error);
+        return {
+          ok: false,
+          error: { code: "500", message: "Noe gikk galt i databasen", fieldErrors: {} },
+        };
+      }
+    },
+
+    async create(data) {
+      try {
+        const created = await _db.insert(projects).values(data).returning().get();
+        return { ok: true, data: created };
+      } catch (error) {
+        console.error(error);
+        return {
+          ok: false,
+          error: { code: "500", message: "Noe gikk galt i databasen", fieldErrors: {} },
+        };
+      }
+    },
+  };
+}
+
+// Singleton: den instansen resten av appen importerer
+export const repository = createProjectRepository(db);
+</script>
+
+  <script type="text/plain" id="code-svc">
+// Forretningslogikken. Fristilt fra databasen og fra request/response
+// (HTTP-laget). Stort sett ren TypeScript: validering, tilgang og regler.
+
+export interface ProjectService {
+  list(user: SessionUser | null, params?: Params): Promise<Result<ProjectDTO[]>>;
+  create(user: SessionUser | null, input: unknown): Promise<Result<ProjectDTO>>;
+  findById(user: SessionUser | null, id: string): Promise<Result<ProjectDTO>>;
+  // update og remove følger samme mønster, se task-service.ts
+}
+
+export function createProjectService(_repository: ProjectRepository): ProjectService {
+  // Eieren eller en admin. Samme regel for å lese og for å endre ett prosjekt.
+  const canAccess = (user: SessionUser, project: Project) =>
+    project.ownerId === user.id || isAdmin(user);
+
+  return {
+    async create(user, input) {
+      // 1. Sjekk på bruker. user er ctx.user, sendt inn av laget over
+      if (!user) {
+        return {
+          ok: false,
+          error: { code: "401", message: "Du må være innlogget", fieldErrors: {} },
+        };
+      }
+
+      // 2. Formen. Alt utenfra er unknown til Zod har sjekket det
+      const parsed = createProjectSchema.safeParse(input);
+      if (!parsed.success) {
+        return {
+          ok: false,
+          error: {
+            code: "400",
+            message: "Feil med data",
+            fieldErrors: z.flattenError(parsed.error).fieldErrors,
+          },
+        };
+      }
+
+      // 3. Reglene, f.eks. minst 3 tegn i tittelen (utils/validate-project.ts)
+      const rule = validateProject(parsed.data);
+      if (!rule.ok) {
+        return {
+          ok: false,
+          error: {
+            code: "400",
+            message: "Ikke gyldig data",
+            fieldErrors: { [rule.field]: [rule.error] },
+          },
+        };
+      }
+
+      // 4. Eieren settes av serveren, aldri av klienten
+      const result = await _repository.create({ ...parsed.data, ownerId: user.id });
+      if (!result.ok) return result;
+
+      return { ok: true, data: toProjectDTO(result.data) };
+    },
+
+    async findById(user, id) {
+      if (!user) {
+        return {
+          ok: false,
+          error: { code: "401", message: "Du må være innlogget", fieldErrors: {} },
+        };
+      }
+
+      const result = await _repository.findById(id);
+      // Feilet databasen (500), sender vi feilen rett videre
+      if (!result.ok) return result;
+
+      if (!result.data) {
+        return {
+          ok: false,
+          error: { code: "404", message: "Prosjektet finnes ikke", fieldErrors: {} },
+        };
+      }
+
+      // Vi vet hvem du er (ikke 401), men prosjektet er ikke ditt: 403.
+      if (!canAccess(user, result.data)) {
+        return {
+          ok: false,
+          error: {
+            code: "403",
+            message: "Du har ikke tilgang til dette prosjektet",
+            fieldErrors: {},
+          },
+        };
+      }
+
+      return { ok: true, data: toProjectDTO(result.data) };
+    },
+
+    // async list(user, params) { ... }
+  };
+}
+
+export const service = createProjectService(repository);
+</script>
+
+  <script type="text/plain" id="code-ctrl">
+// Her tar vi imot forespørselen og sender svaret tilbake
+
+export interface ProjectController {
+  list(requestInfo: RequestInfo): Promise<Response>;
+  find(requestInfo: RequestInfo): Promise<Response>;
+  create(requestInfo: RequestInfo): Promise<Response>;
+  update(requestInfo: RequestInfo): Promise<Response>;
+  remove(requestInfo: RequestInfo): Promise<Response>;
+  action(requestInfo: RequestInfo): Promise<Response>;
+}
+
+// find, update og action følger samme mønster, se task-controller.ts
+
+export function createProjectController(_service: ProjectService): ProjectController {
+  return {
+    // GET /api/v1/projects?page=2&q=eksamen&sortBy=title
+    async list({ request, ctx }: RequestInfo) {
+      // { page: "2", q: "eksamen", sortBy: "title" }. Servicen sjekker dem.
+      const params = parseParams(request);
+      const result = await _service.list(ctx.user, params);
+
+      return result.ok
+        ? Response.json(result, { status: 200 })
+        : Response.json(result, { status: Number(result.error.code) });
+    },
+
+    // POST /api/v1/projects med JSON, f.eks. { "title": "Eksamensprosjekt" }
+    async create({ request, ctx }: RequestInfo) {
+      // Konvertering kan feile: ødelagt JSON skal gi 400, ikke krasje
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        return Response.json(
+          {
+            ok: false,
+            error: { code: "400", message: "Body må være JSON", fieldErrors: {} },
+          },
+          { status: 400 },
+        );
+      }
+
+      // Hvem som eier prosjektet kommer fra ctx.user, aldri fra bodyen.
+      const result = await _service.create(ctx.user, body);
+
+      // ok: true 201 (opprettet), ellers 400, 401 eller 500 fra servicen.
+      return result.ok
+        ? Response.json(result, { status: 201 })
+        : Response.json(result, { status: Number(result.error.code) });
+    },
+
+    // DELETE /api/v1/projects/:id
+    async remove({ params }: RequestInfo) {
+      const result = await _service.remove(params.id);
+
+      // ok: true 204 (ingen body), ellers 404 eller 500 fra servicen.
+      return result.ok
+        ? new Response(null, { status: 204 })
+        : Response.json(result, { status: Number(result.error.code) });
+    },
+  };
+}
+
+export const controller = createProjectController(service);
+</script>
+
+  <script type="text/plain" id="code-routes">
+// Alle API-rutene for prosjekter på ett sted, med interruptors foran
+export const projectRoutes = [
+  route("/api/v1/projects", {
+    // Et array: alt før siste element er interruptors, siste er handleren
+    get: [requireUser, controller.list],
+    post: [requireUser, controller.create],
+  }),
+  route("/api/v1/projects/:id", {
+    get: [requireUser, controller.find],
+    patch: [requireUser, controller.update],
+    // Bare admin sletter. Eierskapet på get og patch sjekkes i servicen
+    delete: [requireAdmin, controller.remove],
+  }),
+  route("/api/v1/projects/:id/:action", {
+    post: [requireUser, controller.action],
+  }),
+];
+</script>
+
+  <script type="text/plain" id="code-worker">
+export type AppContext = {
+  user: SessionUser | null;
+};
+
+const app = defineApp([
+  // Middleware. Kjører for hver forespørsel, i rekkefølgen de står.
+  setUser,
+
+  // API-ruter. Utenfor render(), så svaret er bare JSON.
+  ...projectRoutes,
+
+  render(Document, [
+    layout(AppLayout, [
+      route("/", Home),
+      // Sider: requireUserPage sender til /login i stedet for 401-JSON
+      route("/projects", [requireUserPage, ProjectsPage]),
+      ...authRoutes,
+    ]),
+  ]),
+]);
+
+export default { fetch: app.fetch };
+</script>
+
+  <script type="text/plain" id="code-login">
+// FORENKLET: ingen controller, service eller repository her. En ekte
+// innlogging har samme lagdeling som prosjektene.
+
+async function login({ request }: RequestInfo) {
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    // Bodyen var ikke et skjema, for eksempel JSON.
+    return Response.json(
+      {
+        ok: false,
+        error: { code: "400", message: "Forventet skjemadata", fieldErrors: {} },
+      },
+      { status: 400 },
+    );
+  }
+
+  // <select name="userId">. Mangler feltet, blir Number(null) 0.
+  const userId = Number(form.get("userId"));
+
+  if (!Number.isInteger(userId) || userId < 1) {
+    return Response.json(
+      {
+        ok: false,
+        error: {
+          code: "400",
+          message: "Ugyldig innlogging",
+          fieldErrors: { userId: ["Mangler bruker"] },
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  // USIKKERT: ingen passord, du er den du sier du er. Alternativ: e-post og
+  // passord, og sjekk passordet mot en hash som er lagret på brukeren.
+  const user = await db.query.users.findFirst({ where: { id: userId } });
+
+  if (!user) {
+    return Response.json(
+      {
+        ok: false,
+        error: {
+          code: "400",
+          message: "Ugyldig innlogging",
+          fieldErrors: { userId: ["Brukeren finnes ikke"] },
+        },
+      },
+      { status: 400 },
+    );
+  }
+
+  // 303 betyr "det gikk bra, hent DENNE siden med GET". Uten redirect ville
+  // Reload i skjermen etter innlogging sendt skjemaet en gang til.
+  return new Response(null, {
+    status: 303,
+    headers: {
+      Location: "/projects",
+      "Set-Cookie": createSessionCookie(user.id),
+    },
+  });
+}
+
+function logout() {
+  return new Response(null, {
+    status: 303,
+    headers: { Location: "/", "Set-Cookie": clearSessionCookie() },
+  });
+}
+
+// Sider. Ligger inne i render() i worker.tsx.
+export const authRoutes = [
+  route("/login", { get: LoginPage, post: login }),
+  route("/logout", { post: logout }),
+];
+</script>
+
+  <script type="text/plain" id="code-cookie">
+export const SESSION_COOKIE = "session";
+
+// Sekunder: én time
+export const SESSION_MAX_AGE = 60 * 60;
+
+function serializeCookie(value: string, maxAge: number) {
+  // Skru av https-kravet lokalt
+  const secure = !import.meta.env.VITE_IS_DEV_SERVER;
+
+  return [
+    `${SESSION_COOKIE}=${value}`,
+    "HttpOnly",
+    "SameSite=Lax",
+    "Path=/",
+    `Max-Age=${maxAge}`,
+    ...(secure ? ["Secure"] : []),
+  ].join("; ");
+}
+
+/** Innlogging: cookien nettleseren skal ta vare på. */
+export function createSessionCookie(userId: number) {
+  // USIKKERT: verdien er bare bruker-id-en. Endrer du `2` til `1` i DevTools,
+  // er du en annen bruker. Alternativ: signer verdien (HMAC med en hemmelighet
+  // i .dev.vars), eller lagre en tilfeldig sesjons-id i en sessions-tabell.
+  return serializeCookie(String(userId), SESSION_MAX_AGE);
+}
+
+// Utlogging: Max-Age=0. Da kaster nettleseren den selv.
+export function clearSessionCookie() {
+  return serializeCookie("", 0);
+}
+</script>
+
+  <script type="text/plain" id="code-mw">
+// session.ts
+// "annet=1; session=2" -> "2"
+export function readCookie(cookieHeader: string | null, name: string) {
+  for (const part of cookieHeader?.split(";") ?? []) {
+    const index = part.indexOf("=");
+    if (index === -1 || part.slice(0, index).trim() !== name) continue;
+
+    try {
+      return decodeURIComponent(part.slice(index + 1).trim());
+    } catch {
+      // Ugyldig %-koding. Headeren kommer utenfra, og skal aldri velte serveren.
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
+// middleware.ts
+// Middleware: fyller ryggsekken. Stopper aldri forespørselen.
+export const setUser: RouteMiddleware = async ({ ctx, request }) => {
+  // Nettleseren sender cookien, mobilappen sender en header. Resten er likt.
+  // Begge gir "2" -> 2, og alt annet -> null.
+  const userId = readSessionUserId(request) ?? readBearerUserId(request);
+
+  if (!userId) {
+    ctx.user = null;
+    return;
+  }
+
+  // Rollen slås opp i databasen på hver forespørsel, aldri lest fra cookien
+  const user = await db.query.users.findFirst({
+    where: { id: userId },
+    columns: { id: true, name: true, email: true, role: true },
+  });
+
+  ctx.user = user ?? null;
+};
+</script>
+
+  <script type="text/plain" id="code-guards">
+// Interruptor: returner en Response for å stoppe,
+// returner ingenting for å slippe videre.
+
+export const requireUser: RouteMiddleware = ({ ctx }) => {
+  if (!ctx.user) {
+    return Response.json(
+      {
+        ok: false,
+        error: { code: "401", message: "Du må være innlogget", fieldErrors: {} },
+      },
+      { status: 401 },
+    );
+  }
+};
+
+export const requireAdmin: RouteMiddleware = ({ ctx }) => {
+  if (!ctx.user) {
+    return Response.json(
+      {
+        ok: false,
+        error: { code: "401", message: "Du må være innlogget", fieldErrors: {} },
+      },
+      { status: 401 },
+    );
+  }
+  if (!isAdmin(ctx.user)) {
+    return Response.json(
+      {
+        ok: false,
+        error: { code: "403", message: "Bare admin har lov til dette", fieldErrors: {} },
+      },
+      { status: 403 },
+    );
+  }
+};
+
+// Sider, ikke API: send til innlogging i stedet for å svare med JSON
+export const requireUserPage: RouteMiddleware = ({ ctx }) => {
+  if (!ctx.user) {
+    return new Response(null, { status: 302, headers: { Location: "/login" } });
+  }
+};
+</script>
+
+  <script type="text/plain" id="code-rsc">
+// Server-komponent: kjører på serveren, kan bruke servicen direkte
+export async function ProjectsPage() {
+  const { request } = requestInfo;
+  // ?q=eksamen&sortBy=title
+  const params = parseParams(request);
+
+  return (
+    <main>
+      <h1>Prosjekter</h1>
+      <Suspense fallback={<p aria-busy="true">Henter prosjekter …</p>}>
+        <Projects params={params} />
+      </Suspense>
+    </main>
+  );
+}
+
+async function Projects({ params }: { params: Params }) {
+  const { ctx } = requestInfo;
+  const result = await service.list(ctx.user, params);
+
+  if (!result.ok) {
+    // { q: ["feil"], page: ["feil 2"] } -> ["feil", "feil 2"]
+    const details = Object.values(result.error.fieldErrors ?? {}).flat();
+    return (
+      <p role="alert">
+        Klarte ikke å hente prosjektene: {result.error.message} {details.join(" ")}
+      </p>
+    );
+  }
+
+  if (result.data.length === 0) return <p>Ingen prosjekter ennå.</p>;
+
+  return (
+    <ul>
+      {result.data.map((project) => (
+        <li key={project.id}>{project.title}</li>
+      ))}
+    </ul>
+  );
+}
+</script>
+
+  <script type="text/plain" id="code-action">
+"use server";
+
+export type CreateProjectFormState =
+  | { ok: true; data: ProjectDTO }
+  | {
+      ok: false;
+      error: { code: string; message: string; fieldErrors: Record<string, string[]> };
+      values: { title: string };
+    }
+  | null;
+
+export async function createProjectAction(
+  _prevState: CreateProjectFormState,
+  formData: FormData,
+): Promise<CreateProjectFormState> {
+  // <input name="title" />
+  const values = { title: String(formData.get("title") ?? "") };
+
+  // En server action går utenom vaktene på API-rutene (requireUser). Derfor
+  // sender vi ctx.user til servicen, som sjekker innlogging og eier selv.
+  const { ctx } = requestInfo;
+  const result = await service.create(ctx.user, values);
+
+  // values sendes tilbake, så skjemaet kan fylle inn det brukeren skrev
+  return result.ok
+    ? { ok: true, data: result.data }
+    : { ok: false, error: result.error, values };
+}
+</script>
+
+  <script type="text/plain" id="code-form">
+"use client";
+
+export function CreateProjectForm() {
+  const [state, formAction, isPending] = useActionState(createProjectAction, null);
+
+  const failed = state?.ok === false ? state : null;
+  const titleError = failed?.error.fieldErrors.title?.[0];
+
+  return (
+    <form action={formAction}>
+      <label htmlFor="title">Tittel</label>
+      <input
+        id="title"
+        name="title"
+        defaultValue={failed?.values.title ?? ""}
+        placeholder="F.eks. Eksamensprosjekt"
+        aria-invalid={titleError ? true : undefined}
+        aria-describedby={titleError ? "title-error" : undefined}
+      />
+      {titleError && (
+        <p id="title-error" role="alert">{titleError}</p>
+      )}
+      {failed && !titleError && <p role="alert">{failed.error.message}</p>}
+      {state?.ok && <p role="status">Prosjektet er opprettet</p>}
+      <button type="submit" disabled={isPending}>
+        {isPending ? "Lagrer..." : "Opprett prosjekt"}
+      </button>
+    </form>
+  );
+}
+</script>
+
+  <script type="text/plain" id="code-api">
+// Abstraksjon rundt fetch. Bare denne fila vet URL, metode og headers.
+
+type CreateProjectResult =
+  | { ok: true; data: ProjectDTO }
+  | {
+      ok: false;
+      error: { code: string; message: string; fieldErrors: Record<string, string[]> };
+    };
+
+export async function createProject(data: {
+  title: string;
+  description?: string;
+}): Promise<CreateProjectResult> {
+  try {
+    const response = await fetch("/api/v1/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    // API-et svarer { ok, data } ved 201 og { ok: false, error } ved 400/401/500.
+    // TODO: `as` sier bare til TypeScript hvilken form svaret har, uten å sjekke
+    // det. Svaret kommer utenfra og bør valideres med Zod og safeParse.
+    return (await response.json()) as CreateProjectResult;
+  } catch (error) {
+    // Nettverksfeil: fetch kom aldri fram til serveren
+    console.error(error);
+    return {
+      ok: false,
+      error: { code: "500", message: "Fikk ikke kontakt med serveren", fieldErrors: {} },
+    };
+  }
+}
+</script>
+
+  <script type="text/plain" id="code-fetch">
+"use client";
+
+// code er HTTP-statusen som tekst
+const messageFor = (error: { code: string; message: string }) =>
+  error.code === "401" ? "Du er logget ut. Logg inn igjen." :
+  error.code === "403" ? "Du har ikke tilgang til dette." :
+  error.code === "500" ? "Noe gikk galt hos oss. Prøv igjen." :
+  error.message;
+
+export function CreateProjectClient() {
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); // vi sender selv
+    const form = event.currentTarget;
+    const title = String(new FormData(form).get("title") ?? "");
+    setError(null);
+
+    startTransition(async () => {
+      // Cookien følger med automatisk, samme domene
+      const result = await createProject({ title });
+      if (!result.ok) {
+        setError(messageFor(result.error));
+        return;
+      }
+
+      form.reset();
+      // Hent siden på nytt fra serveren, så lista viser det nye prosjektet
+      await navigate(window.location.pathname, {
+        history: "replace",
+        info: { scrollToTop: false },
+      });
+    });
+  }
+
+  // ... samme felt som i CreateProjectForm, med onSubmit={onSubmit}
+}
+</script>
+
+  <script type="text/plain" id="code-provider">
+"use client";
+
+type AuthContextValue = {
+  user: SessionUser | null;
+  isAdmin: boolean;
+};
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+type AuthProviderProps = {
+  user: SessionUser | null;
+  children: ReactNode;
+};
+
+export function AuthProvider({ user, children }: AuthProviderProps) {
+  const value = {
+    user,
+    isAdmin: isAdmin(user),
+  };
+  return <AuthContext value={value}>{children}</AuthContext>;
+}
+
+export function useAuth() {
+  const context = use(AuthContext);
+  if (!context) {
+    throw new Error("Invalid use of context. Must have AuthProvider");
+  }
+  return context;
+}
+
+// I AppLayout (server): <AuthProvider user={ctx.user}>…</AuthProvider>
+// I ProjectItem (klient):
+function DeleteButton({ onDelete }: { onDelete: () => void }) {
+  const { isAdmin } = useAuth();
+  // Å skjule knappen er for brukeren, ikke sikkerhet. Det er
+  // requireAdmin på DELETE-ruta som faktisk stopper en vanlig bruker.
+  if (!isAdmin) return null;
+  return <button type="button" onClick={onDelete}>Slett</button>;
+}
+</script>
+
+  <script>
+    (function () {
+      /* ---------- kode: innsetting + enkel utheving ---------- */
+      const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const KW = /\b(export|const|let|async|await|function|return|if|else|try|catch|type|interface|import|from|new|true|false|null|undefined|default|as)\b/g;
+      function commentAt(line) {
+        let q = null;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (q) { if (ch === "\\") { i++; continue; } if (ch === q) q = null; continue; }
+          if (ch === '"' || ch === "'" || ch === "`") { q = ch; continue; }
+          if (ch === "/" && line[i + 1] === "/" && line[i - 1] !== ":") return i;
+        }
+        return -1;
+      }
+      function hl(src) {
+        return src.split("\n").map(line => {
+          let code = line, com = "";
+          const i = commentAt(line);
+          if (i >= 0) { code = line.slice(0, i); com = line.slice(i); }
+          const parts = code.split(/("(?:[^"\\]|\\.)*"|`[^`]*`)/);
+          const out = parts.map((p, idx) => idx % 2
+            ? '<span class="s">' + esc(p) + "</span>"
+            : esc(p).replace(KW, '<span class="k">$1</span>')).join("");
+          return out + (com ? '<span class="c">' + esc(com) + "</span>" : "");
+        }).join("\n");
+      }
+      document.querySelectorAll("pre[data-code]").forEach(pre => {
+        const src = document.getElementById("code-" + pre.dataset.code);
+        if (!src) return;
+        const text = src.textContent.replace(/^\n/, "").replace(/\s+$/, "");
+        pre.dataset.raw = text;
+        pre.innerHTML = hl(text);
+      });
+      document.querySelectorAll("[data-copy]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const pre = btn.closest("figure").querySelector("pre");
+          const done = () => { btn.textContent = "Kopiert"; setTimeout(() => btn.textContent = "Kopier", 1500); };
+          const fallback = () => { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Trykk Ctrl+C"; };
+          try { navigator.clipboard.writeText(pre.dataset.raw).then(done, fallback); } catch (e) { fallback(); }
+        });
+      });
+
+      /* ---------- steg-for-steg ---------- */
+      const NAMES = { ui: "UI / nettleser", mw: "Ruter + middleware", ctrl: "Controller", svc: "Service", repo: "Repository", db: "Database" };
+      const CLS = { ui: "l-ui", mw: "l-mw", ctrl: "l-ctrl", svc: "l-svc", repo: "l-repo", db: "l-db" };
+      const NO = "–", SID = "session=2";
+      const OLA = '{ id: 2, name: "Ola Hansen", role: "user" }';
+      const SCEN = [
+        {
+          name: "Logg inn", steps: [
+            { l: "ui", t: "Brukeren sender innloggingsskjemaet", x: "POST /login med userId fra nedtrekkslista som FormData. Jukseinnlogging: ingen passord. Nettleseren har ingen cookie ennå.", c: NO, u: "null" },
+            { l: "mw", t: "Middleware finner ingen cookie", x: "setUser leser Cookie-headeren, finner ingen session og setter ctx.user = null. /login har ingen interruptor, så forespørselen går videre.", c: NO, u: "null", hot: "u" },
+            { l: "mw", t: "Login-handleren sjekker userId", x: "login i auth-routes.ts leser FormData og sjekker at userId er et positivt heltall. Forenklet: ingen controller, service eller repository her.", c: NO, u: "null" },
+            { l: "db", t: "Brukeren slås opp", x: "db.query.users.findFirst({ where: { id } }). Finnes ikke brukeren, svarer handleren 400 «Ugyldig innlogging».", c: NO, u: "null" },
+            { l: "mw", t: "Handleren setter cookien", x: "Svarer 303 med Location: /projects og Set-Cookie: session=2; HttpOnly; SameSite=Lax; Path=/; Max-Age=3600.", c: NO, u: "null" },
+            { l: "ui", t: "Nettleseren lagrer cookien", x: "Følger Location med en GET. JavaScript kan ikke lese cookien, men nettleseren sender den med på hver forespørsel til samme domene fra nå av.", c: SID, u: "null", hot: "c" },
+            { l: "mw", t: "setUser kjenner deg igjen", x: "Leser session=2 og slår opp brukeren i databasen. Rollen kommer fra users-tabellen, ikke fra cookien.", c: SID, u: OLA, hot: "u" },
+          ]
+        },
+        {
+          name: "Opprett prosjekt", steps: [
+            { l: "ui", t: "Skjemaet sender en ny forespørsel", x: "POST /api/v1/projects med body { \"title\": \"Eksamensprosjekt\" }. Headeren Cookie: session=2 legges på automatisk.", c: SID, u: "null" },
+            { l: "mw", t: "Middleware fyller ryggsekken", x: "setUser leser cookien, slår opp bruker og rolle i databasen og setter ctx.user.", c: SID, u: OLA, hot: "u" },
+            { l: "mw", t: "requireUser slipper gjennom", x: "Interruptoren ser at ctx.user finnes og returnerer ingenting. Kjeden går videre til controlleren.", c: SID, u: OLA },
+            { l: "ctrl", t: "Controlleren parser JSON", x: "request.json() i try/catch. Lykkes den, sendes body og ctx.user videre til service.create.", c: SID, u: OLA },
+            { l: "svc", t: "Servicen validerer og setter eier", x: "Zod sjekker formen, validateProject sjekker reglene. ownerId settes til user.id fra ctx. Klienten får aldri bestemme eier selv.", c: SID, u: OLA },
+            { l: "repo", t: "Repositoryet lagrer", x: "insert(projects).values(data).returning().get(). Repositoryet svarer { ok: true, data: project }.", c: SID, u: OLA },
+            { l: "ctrl", t: "Svaret blir 201 Created", x: "Servicen har gjort raden om til en DTO med toProjectDTO. Controlleren svarer Response.json(result, { status: 201 }).", c: SID, u: OLA },
+            { l: "ui", t: "UI viser suksess", x: "Klienten ser result.ok, viser «Prosjektet er opprettet» og henter lista på nytt.", c: SID, u: OLA },
+          ]
+        },
+        {
+          name: "Ugyldig input", steps: [
+            { l: "ui", t: "Tittelen er for kort", x: "Klientvalideringen ble hoppet over (noen sendte forespørselen med curl). Body: { \"title\": \"ab\" }.", c: SID, u: "null" },
+            { l: "mw", t: "Innlogget, slipper gjennom", x: "Cookien er gyldig, setUser setter ctx.user, requireUser slipper videre.", c: SID, u: OLA, hot: "u" },
+            { l: "ctrl", t: "JSON er gyldig", x: "Parsingen går bra, så controlleren sender dataene videre. Den vurderer ikke om tittelen er god nok.", c: SID, u: OLA },
+            { l: "svc", t: "Reglene stopper den", x: "Zod godtar formen, men validateProject sier nei. Servicen svarer { ok: false, error: { code: \"400\", message: \"Ikke gyldig data\", fieldErrors: { title: [\"Tittel må ha minst 3 tegn\"] } } }. Repositoryet kalles aldri.", c: SID, u: OLA },
+            { l: "ctrl", t: "\"400\" blir 400", x: "Number(result.error.code) gir statusen. Body er det samme objektet servicen svarte med.", c: SID, u: OLA },
+            { l: "ui", t: "Feilen vises ved feltet", x: "fieldErrors.title[0] vises under feltet, med aria-invalid og role=\"alert\". Dette er grunnen til at serveren alltid validerer på nytt.", c: SID, u: OLA },
+          ]
+        },
+        {
+          name: "Ola sletter et prosjekt", steps: [
+            { l: "ui", t: "DELETE /api/v1/projects/abc", x: "Slett-knappen er skjult for Ola, men forespørselen kan sendes med curl eller fra DevTools. Cookien følger med.", c: SID, u: "null" },
+            { l: "mw", t: "Middleware setter brukeren", x: "Cookien er gyldig, så ctx.user får role: \"user\". Rollen kommer fra databasen.", c: SID, u: OLA, hot: "u" },
+            { l: "mw", t: "requireAdmin stopper", x: "Rollen er ikke admin. Interruptoren returnerer en 403-Response med { ok: false, error: { code: \"403\" } }, og kjeden stopper her.", c: SID, u: OLA },
+            { l: "ui", t: "Ingen tilgang", x: "Klienten får 403. Controller, service og repository ble aldri kjørt, så ingenting ble slettet.", c: SID, u: OLA },
+          ]
+        },
+      ];
+
+      const flow = document.getElementById("flow");
+      const nodes = flow.querySelectorAll(".node");
+      const scenEl = document.getElementById("scen");
+      const tag = document.getElementById("st-tag"), title = document.getElementById("st-title"),
+        text = document.getElementById("st-text"), dots = document.getElementById("st-dots"),
+        cnt = document.getElementById("st-count"), ck = document.getElementById("st-cookie"),
+        cx = document.getElementById("st-ctx"), prev = document.getElementById("prev"), next = document.getElementById("next");
+      let s = 0, i = 0;
+
+      SCEN.forEach((sc, idx) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.textContent = sc.name; b.id = "scen-" + idx;
+        b.addEventListener("click", () => { s = idx; i = 0; render(); });
+        scenEl.appendChild(b);
+      });
+
+      function render() {
+        const sc = SCEN[s], st = sc.steps[i];
+        scenEl.querySelectorAll("button").forEach((b, idx) => b.setAttribute("aria-pressed", idx === s));
+        flow.classList.add("playing");
+        nodes.forEach(n => n.classList.toggle("on", n.dataset.layer === st.l));
+        tag.className = "layer-tag " + CLS[st.l];
+        tag.textContent = NAMES[st.l];
+        title.textContent = st.t; text.textContent = st.x;
+        ck.innerHTML = "<b>Cookie i nettleseren</b>" + st.c.replace(/</g, "&lt;");
+        cx.innerHTML = "<b>ctx.user</b>" + st.u.replace(/</g, "&lt;");
+        ck.className = "chip" + (st.hot === "c" ? " hot l-dom" : "");
+        cx.className = "chip" + (st.hot === "u" ? " hot l-dom" : "");
+        dots.innerHTML = sc.steps.map((_, k) => '<span class="' + (k <= i ? "on" : "") + '"></span>').join("");
+        cnt.textContent = "Steg " + (i + 1) + " av " + sc.steps.length;
+        prev.disabled = i === 0;
+        next.textContent = i === sc.steps.length - 1 ? (s < SCEN.length - 1 ? "Neste scenario" : "Start på nytt") : "Neste steg";
+      }
+      prev.addEventListener("click", () => { if (i > 0) { i--; render(); } });
+      next.addEventListener("click", () => {
+        if (i < SCEN[s].steps.length - 1) i++;
+        else { s = (s + 1) % SCEN.length; i = 0; }
+        render();
+      });
+      document.addEventListener("keydown", e => {
+        if (e.target.closest("input,textarea")) return;
+        if (e.key === "ArrowRight" && document.activeElement.closest("#player")) next.click();
+        if (e.key === "ArrowLeft" && document.activeElement.closest("#player")) prev.click();
+      });
+      render();
+    })();
+  </script>
+
+</body>
+
+</html>
