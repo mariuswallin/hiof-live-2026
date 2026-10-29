@@ -1,6 +1,8 @@
 import { Theme } from "@/constants/theme";
+import { useAuth } from "@/contexts/AuthContext";
 
 import type { Task } from "@/utils/task-schema";
+import { Link } from "expo-router";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 
 type TaskItemProps = {
@@ -11,6 +13,7 @@ type TaskItemProps = {
 
 export function TaskItem({ task, onToggle, onRemove }: TaskItemProps) {
   const { id, title, done } = task;
+  const { isAdmin } = useAuth();
 
   return (
     <View style={[styles.container, done && styles.containerDone]}>
@@ -21,9 +24,12 @@ export function TaskItem({ task, onToggle, onRemove }: TaskItemProps) {
         <Text style={[styles.title, done && styles.titleDone]}>{title}</Text>
       </Pressable>
       {/* <Text>{tasks.length}</Text> */}
-      <Pressable onPress={() => onRemove(id)} hitSlop={8}>
-        <Text style={styles.remove}>Slett</Text>
-      </Pressable>
+      <Link href={{ pathname: "/tasks/[id]", params: { id } }}>Gå til</Link>
+      {isAdmin ? (
+        <Pressable onPress={() => onRemove(id)} hitSlop={8}>
+          <Text style={styles.remove}>Slett</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

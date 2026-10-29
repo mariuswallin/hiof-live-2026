@@ -18,6 +18,7 @@ type TaskContextData = {
   addApi: (task: Omit<Task, "id">) => Promise<void>;
   toggleApi: (id: string) => Promise<void>;
   removeApi: (id: string) => Promise<void>;
+  incompleteTasks: Task[];
 };
 
 const TasksContext = createContext<TaskContextData | null>(null);
@@ -31,6 +32,8 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const incompleteTasks = tasks.filter((task) => !task.done);
 
   // Henter på nytt hver gang tokenet endrer seg: ved innlogging, og når en
   // annen bruker logger inn. Uten token er ingen innlogget, og lista tømmes.
@@ -122,6 +125,7 @@ export function TasksProvider({ children }: { children: React.ReactNode }) {
         addApi,
         toggleApi,
         removeApi,
+        incompleteTasks,
       }}
     >
       {children}

@@ -24,7 +24,7 @@ function RootNavigator() {
       </Stack.Protected>
 
       <Stack.Protected guard={validUser}>
-        <Stack.Screen name="index" />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="new-task" options={{ title: "Ny oppgave" }} />
         <Stack.Screen
           name="about"
