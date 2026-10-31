@@ -20,6 +20,8 @@ export const Theme = {
   surface: "#ffffff",
   text: "#111827",
   textInverted: "#ffffff",
+  // STEG 2: tittelen i TaskItem (fra live).
+  textDark: "#000000",
 
   // Avstander. Faste trinn gir jevn rytme i UI-et.
   spacing: {

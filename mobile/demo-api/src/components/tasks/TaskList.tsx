@@ -1,22 +1,20 @@
+// STEG 2B: (tabs)/tasks/index.tsx -> HER -> TaskItem.tsx.
+// TaskRegister er flyttet til app/new-task.tsx.
+
 import type { Task } from "@/utils/task-schema";
 import { View, Text, StyleSheet } from "react-native";
 import { TaskItem } from "./TaskItem";
 import { Theme } from "@/constants/theme";
-import { TaskRegister } from "./TaskRegister";
 
+// STEG 2B: onRegister og TaskRegister er fjernet - skjemaet er nå en egen
+// skjerm (new-task.tsx, "+" i headeren). Lista viser bare lista.
 type TaskListProps = {
   tasks: Task[];
-  onRegister: (taskName: string) => void;
   onToggle: (id: string) => void;
   onRemove: (id: string) => void;
 };
 
-export function TaskList({
-  tasks,
-  onRegister,
-  onToggle,
-  onRemove,
-}: TaskListProps) {
+export function TaskList({ tasks, onToggle, onRemove }: TaskListProps) {
   // const [query, setQuery] = useState(["na"]);
   // // const [filtered, setFiltered] = useState(tasks);
 
@@ -37,7 +35,6 @@ export function TaskList({
 
   return (
     <View style={styles.container}>
-      <TaskRegister onRegister={onRegister} />
       {tasks.length === 0 ? <Text>No tasks available</Text> : null}
       {tasks.map((task) => (
         <TaskItem

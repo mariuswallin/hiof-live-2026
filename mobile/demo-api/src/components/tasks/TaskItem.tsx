@@ -1,6 +1,9 @@
+// STEG 2B: (tabs)/tasks/index.tsx -> TaskList.tsx -> HER -> Link til (tabs)/tasks/[id].tsx
+
 import { Theme } from "@/constants/theme";
-import { useTasks } from "@/contexts/TasksContext";
 import type { Task } from "@/utils/task-schema";
+// STEG 2B: Link, for å gjøre tittelen til en lenke til detaljsiden.
+import { Link } from "expo-router";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 
 type TaskItemProps = {
@@ -13,15 +16,45 @@ export function TaskItem({ task, onToggle, onRemove }: TaskItemProps) {
   const { id, title, done } = task;
 
   return (
+    // STEG 2B: tre trykkbare ting VED SIDEN AV hverandre - ingen inni hverandre:
+    //   boksen -> toggle   tittelen -> detaljsiden   Slett -> slett
+    // Da treffer et trykk alltid bare én av dem, også på web (der bobler et
+    // klikk ellers videre til det som ligger utenpå).
     <View style={[styles.container, done && styles.containerDone]}>
-      <Pressable onPress={() => onToggle(id)}>
+      {/* STEG 2B: Pressable bare rundt boksen (før: boksen OG tittelen). */}
+      <Pressable
+        onPress={() => onToggle(id)}
+        hitSlop={8}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: done }}
+      >
         <View style={[styles.checkbox, done && styles.checkboxDone]}>
           {done ? <Text style={styles.checkmark}>✓</Text> : null}
         </View>
-        <Text style={[styles.title, done && styles.titleDone]}>{title}</Text>
       </Pressable>
-      {/* <Text>{tasks.length}</Text> */}
-      <Pressable onPress={() => onRemove(id)} hitSlop={8}>
+
+      {/*
+        STEG 2B: tittelen er en LENKE til detaljsiden. href som objekt:
+        pathname med [id] som plassholder, params fyller den inn.
+        flex: 1 i styles.title skyver Slett helt til høyre.
+      */}
+      <Link
+        href={{ pathname: "/tasks/[id]", params: { id } }}
+        style={[styles.title, done && styles.titleDone]}
+      >
+        {title}
+      </Link>
+
+      {/*
+        STEG 2A: vises for alle. Ola (user) får 403 fra webappen, og raden
+        kommer tilbake. Skjule knappen er pynt - det er serveren som sperrer.
+      */}
+      <Pressable
+        onPress={() => onRemove(id)}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Slett ${title}`}
+      >
         <Text style={styles.remove}>Slett</Text>
       </Pressable>
     </View>
@@ -67,7 +100,8 @@ const styles = StyleSheet.create({
   title: {
     flex: 1,
     fontSize: Theme.fontSize.md,
-    color: Theme.text,
+    // STEG 2: textDark (fra live).
+    color: Theme.textDark,
   },
   titleDone: {
     color: Theme.muted,
